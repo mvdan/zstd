@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"io"
 	"math/bits"
+
+	"github.com/cespare/xxhash"
 )
 
 // limits
@@ -82,7 +84,6 @@ func (r *reader) decodeFrame() error {
 	}
 
 	contChecksum := (frameHeader >> 2) & 1
-	_ = contChecksum // TODO use it
 
 	dictIDFlag := frameHeader & 3
 	dictIDFieldSize := dictIDFieldSizes[dictIDFlag]
@@ -110,12 +111,30 @@ func (r *reader) decodeFrame() error {
 	if frameContSize > limitFrameContentSize {
 		panic("zstd frame content size is too big")
 	}
+	decstart := r.decpos
 	for {
-		if err := r.decodeBlock(); err != nil {
+		if err := r.decodeBlock(); err == errLastBlock {
+			break
+		} else if err != nil {
 			return err
 		}
 	}
+
+	if contChecksum == 1 {
+		data := r.window[decstart:r.decpos]
+		wantSum, err := r.littleEndian(4)
+		if err != nil {
+			return err
+		}
+		gotSum := xxhash.Sum64(data) & 0xFFFFFFFF
+		if wantSum != gotSum {
+			return fmt.Errorf("frame xxhash mismatch")
+		}
+	}
+	return nil
 }
+
+var errLastBlock = fmt.Errorf("last block")
 
 func (r *reader) decodeBlock() error {
 	// block header
@@ -239,10 +258,9 @@ func (r *reader) decodeBlock() error {
 	default:
 		panic("unsupported block type")
 	}
-	if lastBlock != 0 {
-		return io.EOF
+	if lastBlock == 1 {
+		return errLastBlock
 	}
-
 	return nil
 }
 
