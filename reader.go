@@ -156,110 +156,117 @@ func (r *reader) decodeBlock() error {
 		}
 		r.decpos += uint(blockSize)
 	case blockTypeCompressed:
-		b, err := r.br.ReadByte()
-		if err != nil {
+		if err := r.decodeBlockCompressed(blockSize); err != nil {
 			return err
-		}
-		litBlockType := b & 3
-		litSectionSize := uint64(1)
-		var stream []byte
-		switch litBlockType {
-		case litBlockTypeRaw:
-			// literals section
-			sizeFormat := (b >> 2) & 1
-			if sizeFormat == 1 {
-				panic("TODO")
-			}
-			regSize := b >> 3
-			stream = make([]byte, regSize)
-			if err := r.readAll(stream); err != nil {
-				return err
-			}
-			litSectionSize += uint64(regSize)
-		default:
-			panic("unsupported lit block type")
-		}
-		// sequences section
-		seqSectionSize := blockSize - litSectionSize
-		seqBs := make([]byte, seqSectionSize)
-		if err := r.readAll(seqBs); err != nil {
-			return err
-		}
-		numSeq := uint64(0)
-		if b0 := uint64(seqBs[0]); b0 < 128 {
-			numSeq = b0
-			seqBs = seqBs[1:]
-		} else if b0 < 255 {
-			b1 := uint64(seqBs[1])
-			numSeq = ((b0 - 128) << 8) + b1
-			seqBs = seqBs[2:]
-		} else if b0 == 255 {
-			b1 := uint64(seqBs[1])
-			b2 := uint64(seqBs[2])
-			numSeq = b1 + (b2 << 8) + 0x7F00
-			seqBs = seqBs[3:]
-		}
-		if numSeq == 0 {
-			panic("TODO: sequence section stops")
-		}
-		b0 := seqBs[0]
-		seqBs = seqBs[1:]
-		reserved := b0 & 3
-		if reserved != 0 {
-			panic("symbol compression modes had a non-zero reserved field")
-		}
-
-		litLengthTable := r.readFSETable(b0>>6,
-			&litLengthCodeDefaultTable)
-		offsetTable := r.readFSETable((b0>>4)&3,
-			&offsetCodeDefaultTable)
-		matchLengthTable := r.readFSETable((b0>>2)&3,
-			&matchLengthDefaultTable)
-
-		bitr := backwardBitReader{rem: seqBs}
-		bitr.skipPadding()
-		litLengthState := bitr.read(litLengthTable.accLog)
-		offsetState := bitr.read(offsetTable.accLog)
-		matchLengthState := bitr.read(matchLengthTable.accLog)
-
-		for i := uint64(0); i < numSeq; i++ {
-			offsetCode := offsetTable.symbol[offsetState]
-			offset := (1 << offsetCode) + bitr.read(offsetCode)
-
-			matchLengthCode := matchLengthTable.symbol[matchLengthState]
-			matchLength := uint64(matchLengthBaselines[matchLengthCode]) +
-				bitr.read(matchLengthExtraBits[matchLengthCode])
-
-			litLengthCode := litLengthTable.symbol[litLengthState]
-			litLength := uint64(litLengthBaselines[litLengthCode]) +
-				bitr.read(litLengthExtraBits[litLengthCode])
-
-			// sequence execution
-			copy(r.window[r.decpos:], stream[:litLength])
-			r.decpos += uint(litLength)
-			// match_length
-			switch offset {
-			case 1:
-				for n := uint64(0); n < matchLength; n += litLength {
-					length := litLength
-					if n+litLength >= matchLength {
-						length = uint64(len(stream))
-					}
-					copy(r.window[r.decpos:], stream[:length])
-					r.decpos += uint(length)
-				}
-			default:
-				panic("TODO: unimplemented offset")
-			}
-		}
-		if !bitr.empty() {
-			return fmt.Errorf("sequence bitstream was corrupted")
 		}
 	default:
 		panic("unsupported block type")
 	}
 	if lastBlock == 1 {
 		return errLastBlock
+	}
+	return nil
+}
+
+func (r *reader) decodeBlockCompressed(blockSize uint64) error {
+	b, err := r.br.ReadByte()
+	if err != nil {
+		return err
+	}
+	litBlockType := b & 3
+	litSectionSize := uint64(1)
+	var stream []byte
+	switch litBlockType {
+	case litBlockTypeRaw:
+		// literals section
+		sizeFormat := (b >> 2) & 1
+		if sizeFormat == 1 {
+			panic("TODO")
+		}
+		regSize := b >> 3
+		stream = make([]byte, regSize)
+		if err := r.readAll(stream); err != nil {
+			return err
+		}
+		litSectionSize += uint64(regSize)
+	default:
+		panic("unsupported lit block type")
+	}
+	// sequences section
+	seqSectionSize := blockSize - litSectionSize
+	seqBs := make([]byte, seqSectionSize)
+	if err := r.readAll(seqBs); err != nil {
+		return err
+	}
+	numSeq := uint64(0)
+	if b0 := uint64(seqBs[0]); b0 < 128 {
+		numSeq = b0
+		seqBs = seqBs[1:]
+	} else if b0 < 255 {
+		b1 := uint64(seqBs[1])
+		numSeq = ((b0 - 128) << 8) + b1
+		seqBs = seqBs[2:]
+	} else if b0 == 255 {
+		b1 := uint64(seqBs[1])
+		b2 := uint64(seqBs[2])
+		numSeq = b1 + (b2 << 8) + 0x7F00
+		seqBs = seqBs[3:]
+	}
+	if numSeq == 0 {
+		panic("TODO: sequence section stops")
+	}
+	b0 := seqBs[0]
+	seqBs = seqBs[1:]
+	reserved := b0 & 3
+	if reserved != 0 {
+		panic("symbol compression modes had a non-zero reserved field")
+	}
+
+	litLengthTable := r.readFSETable(b0>>6,
+		&litLengthCodeDefaultTable)
+	offsetTable := r.readFSETable((b0>>4)&3,
+		&offsetCodeDefaultTable)
+	matchLengthTable := r.readFSETable((b0>>2)&3,
+		&matchLengthDefaultTable)
+
+	bitr := backwardBitReader{rem: seqBs}
+	bitr.skipPadding()
+	litLengthState := bitr.read(litLengthTable.accLog)
+	offsetState := bitr.read(offsetTable.accLog)
+	matchLengthState := bitr.read(matchLengthTable.accLog)
+
+	for i := uint64(0); i < numSeq; i++ {
+		offsetCode := offsetTable.symbol[offsetState]
+		offset := (1 << offsetCode) + bitr.read(offsetCode)
+
+		matchLengthCode := matchLengthTable.symbol[matchLengthState]
+		matchLength := uint64(matchLengthBaselines[matchLengthCode]) +
+			bitr.read(matchLengthExtraBits[matchLengthCode])
+
+		litLengthCode := litLengthTable.symbol[litLengthState]
+		litLength := uint64(litLengthBaselines[litLengthCode]) +
+			bitr.read(litLengthExtraBits[litLengthCode])
+
+		// sequence execution
+		copy(r.window[r.decpos:], stream[:litLength])
+		r.decpos += uint(litLength)
+		// match_length
+		switch offset {
+		case 1:
+			for n := uint64(0); n < matchLength; n += litLength {
+				length := litLength
+				if n+litLength >= matchLength {
+					length = uint64(len(stream))
+				}
+				copy(r.window[r.decpos:], stream[:length])
+				r.decpos += uint(length)
+			}
+		default:
+			panic("TODO: unimplemented offset")
+		}
+	}
+	if !bitr.empty() {
+		return fmt.Errorf("sequence bitstream was corrupted")
 	}
 	return nil
 }
