@@ -35,6 +35,6 @@ func testRead(t *testing.T, decName string) {
 	}
 
 	if string(got) != string(want) {
-		t.Fatalf("got:  %q\nwant: %q", string(got), string(want))
+		t.Fatalf("reader mismatch\ngot:  %q\nwant: %q", string(got), string(want))
 	}
 }
