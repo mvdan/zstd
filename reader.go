@@ -24,6 +24,11 @@ const (
 	skipFrameMagicEnd   = 0x184D2A5F
 )
 
+// NewReader returns a Reader that can be used to read uncompressed
+// bytes from r.
+//
+// For the time being, a bufio.Reader is always used on the input
+// reader.
 func NewReader(r io.Reader) io.Reader {
 	return &reader{
 		br:     bufio.NewReader(r),
@@ -39,6 +44,7 @@ type reader struct {
 	readpos uint
 }
 
+// littleEndian reads a little-endian unsigned integer of size bytes.
 func (r *reader) littleEndian(size uint8) (uint64, error) {
 	var buf [8]byte
 	_, err := r.br.Read(buf[:size])
@@ -46,6 +52,7 @@ func (r *reader) littleEndian(size uint8) (uint64, error) {
 	return val, err
 }
 
+// readAll fills p with read bytes.
 func (r *reader) readAll(p []byte) error {
 	_, err := r.br.Read(p)
 	return err
@@ -60,6 +67,8 @@ func (r *reader) Read(p []byte) (int, error) {
 	return n, err
 }
 
+// decodeFrame decodes an entire zstd frame. An error is returned if the
+// frame was malformed, illegal, or missing bytes.
 func (r *reader) decodeFrame() error {
 	// frame magic number
 	magic, err := r.littleEndian(4)
@@ -151,6 +160,8 @@ func (r *reader) decodeFrame() error {
 
 var errLastBlock = fmt.Errorf("last block")
 
+// decodeBlock decodes an entire zstd block within a frame. An error is
+// returned if the block was malformed, illegal, or missing bytes.
 func (r *reader) decodeBlock() error {
 	// block header
 	blockHeader, err := r.littleEndian(3)
@@ -192,6 +203,8 @@ func (r *reader) decodeBlock() error {
 	return nil
 }
 
+// decodeBlockCompressed is decoupled from decodeBlock to handle
+// compressed blocks, the most complex type of them.
 func (r *reader) decodeBlockCompressed(blockSize uint) error {
 	b, err := r.br.ReadByte()
 	if err != nil {
@@ -246,11 +259,11 @@ func (r *reader) decodeBlockCompressed(blockSize uint) error {
 		return fmt.Errorf("symbol compression modes had a non-zero reserved field")
 	}
 
-	litLengthTable := r.readFSETable(b0>>6,
+	litLengthTable := r.decodeFSETable(b0>>6,
 		&litLengthCodeDefaultTable)
-	offsetTable := r.readFSETable((b0>>4)&3,
+	offsetTable := r.decodeFSETable((b0>>4)&3,
 		&offsetCodeDefaultTable)
-	matchLengthTable := r.readFSETable((b0>>2)&3,
+	matchLengthTable := r.decodeFSETable((b0>>2)&3,
 		&matchLengthDefaultTable)
 
 	bitr := backwardBitReader{rem: seqBs}
@@ -294,7 +307,9 @@ func (r *reader) decodeBlockCompressed(blockSize uint) error {
 	return nil
 }
 
-func (r *reader) readFSETable(mode byte, predefined *fseTable) *fseTable {
+// decodeFSETable decodes a Finite State Entropy table within a
+// compressed block.
+func (r *reader) decodeFSETable(mode byte, predefined *fseTable) *fseTable {
 	switch mode {
 	case compModePredefined:
 		return predefined
@@ -303,6 +318,10 @@ func (r *reader) readFSETable(mode byte, predefined *fseTable) *fseTable {
 	}
 }
 
+// backwardBitReader allows access to a backwards bit stream that was
+// written in a little-endian fashion. That is, the first bit will be
+// the highest bit (after the padding) of the last input byte, and the
+// last bit will be the lowest bit of the first byte.
 type backwardBitReader struct {
 	rem     []byte
 	cur     byte
@@ -328,6 +347,7 @@ func (b *backwardBitReader) skipPadding() {
 }
 
 func (b *backwardBitReader) read(n uint8) uint64 {
+	// TODO: this can very likely be done more efficiently
 	res := uint64(0)
 	for i := uint8(0); i < n; i++ {
 		if b.curbits == 0 {

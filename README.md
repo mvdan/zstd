@@ -1,5 +1,7 @@
 # zstd
 
+[![GoDoc](https://godoc.org/mvdan.cc/zstd?status.svg)](https://godoc.org/mvdan.cc/zstd)
+
 	go get -u mvdan.cc/zstd
 
 An implementation from scratch of [Zstandard] in Go. It is being
