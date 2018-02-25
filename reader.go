@@ -107,7 +107,7 @@ func (r *reader) decodeFrame() error {
 	fcsFieldSize := fcsFieldSizes[fcsFlag]
 
 	singleSegment := (frameHeader >> 5) & 1
-	if singleSegment != 0 {
+	if fcsFlag == 0 && singleSegment != 0 {
 		fcsFieldSize = 1
 	}
 
@@ -137,7 +137,7 @@ func (r *reader) decodeFrame() error {
 
 	frameContSize, err := r.littleEndian(fcsFieldSize)
 	if err != nil {
-		return err
+		return fmt.Errorf("missing frame content size")
 	}
 	if fcsFieldSize == 2 {
 		frameContSize += 256
