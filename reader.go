@@ -149,21 +149,30 @@ func (r *reader) decodeBlock() error {
 
 	blockType := (blockHeader >> 1) & 3
 
-	blockSize := blockHeader >> 3
+	blockSize := uint(blockHeader >> 3)
 	// TODO: block size limits
 	switch blockType {
 	case blockTypeRaw:
-		err := r.readAll(r.window[r.decpos : r.decpos+uint(blockSize)])
+		err := r.readAll(r.window[r.decpos : r.decpos+blockSize])
 		if err != nil {
 			return err
 		}
-		r.decpos += uint(blockSize)
+		r.decpos += blockSize
+	case blockTypeRLE:
+		b, err := r.br.ReadByte()
+		if err != nil {
+			return err
+		}
+		for i := uint(0); i < blockSize; i++ {
+			r.window[r.decpos+i] = b
+		}
+		r.decpos += blockSize
 	case blockTypeCompressed:
 		if err := r.decodeBlockCompressed(blockSize); err != nil {
 			return err
 		}
-	default:
-		panic("unimplemented block type")
+	default: // blockTypeReserved
+		return fmt.Errorf("reserved block type found")
 	}
 	if lastBlock == 1 {
 		return errLastBlock
@@ -171,13 +180,13 @@ func (r *reader) decodeBlock() error {
 	return nil
 }
 
-func (r *reader) decodeBlockCompressed(blockSize uint64) error {
+func (r *reader) decodeBlockCompressed(blockSize uint) error {
 	b, err := r.br.ReadByte()
 	if err != nil {
 		return err
 	}
 	litBlockType := b & 3
-	litSectionSize := uint64(1)
+	litSectionSize := uint(1)
 	var stream []byte
 	switch litBlockType {
 	case litBlockTypeRaw:
@@ -191,7 +200,7 @@ func (r *reader) decodeBlockCompressed(blockSize uint64) error {
 		if err := r.readAll(stream); err != nil {
 			return err
 		}
-		litSectionSize += uint64(regSize)
+		litSectionSize += uint(regSize)
 	default:
 		panic("unimplemented lit block type")
 	}
