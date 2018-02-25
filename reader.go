@@ -16,8 +16,12 @@ const (
 	maxFrameContSize = 8 << 20 // 8MB
 )
 
+// magic numbers
 const (
 	frameMagicNumber = 0xFD2FB528
+
+	skipFrameMagicStart = 0x184D2A50
+	skipFrameMagicEnd   = 0x184D2A5F
 )
 
 func NewReader(r io.Reader) io.Reader {
@@ -60,6 +64,14 @@ func (r *reader) decodeFrame() error {
 	// frame magic number
 	magic, err := r.littleEndian(4)
 	if err != nil {
+		return err
+	}
+	if magic >= skipFrameMagicStart && magic <= skipFrameMagicEnd {
+		skipSize, err := r.littleEndian(4)
+		if err != nil {
+			return err
+		}
+		_, err = r.br.Discard(int(skipSize))
 		return err
 	}
 	if magic != frameMagicNumber {
@@ -262,7 +274,6 @@ func (r *reader) decodeBlockCompressed(blockSize uint) error {
 		// sequence execution
 		copy(r.window[r.decpos:], stream[:litLength])
 		r.decpos += uint(litLength)
-		// match_length
 		switch offset {
 		case 1:
 			for n := uint64(0); n < matchLength; n += litLength {
