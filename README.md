@@ -1,6 +1,7 @@
 # zstd
 
 [![GoDoc](https://godoc.org/mvdan.cc/zstd?status.svg)](https://godoc.org/mvdan.cc/zstd)
+[![Build Status](https://travis-ci.org/mvdan/zstd.svg?branch=master)](https://travis-ci.org/mvdan/zstd)
 
 	go get -u mvdan.cc/zstd
 
