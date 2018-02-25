@@ -12,7 +12,8 @@ func TestReader(t *testing.T) {
 	names, _ := filepath.Glob(filepath.Join("testdata", "*.zst"))
 	for _, name := range names {
 		decName := strings.TrimSuffix(name, ".zst")
-		t.Run(decName, func(t *testing.T) {
+		testName := filepath.Base(decName)
+		t.Run(testName, func(t *testing.T) {
 			testRead(t, decName)
 		})
 	}
