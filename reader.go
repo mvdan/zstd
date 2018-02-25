@@ -47,14 +47,23 @@ type reader struct {
 // littleEndian reads a little-endian unsigned integer of size bytes.
 func (r *reader) littleEndian(size uint8) (uint64, error) {
 	var buf [8]byte
-	_, err := r.br.Read(buf[:size])
+	err := r.readFull(buf[:size])
 	val := binary.LittleEndian.Uint64(buf[:])
 	return val, err
 }
 
-// readAll fills p with read bytes.
-func (r *reader) readAll(p []byte) error {
-	_, err := r.br.Read(p)
+// readFull fills all of p with read bytes.
+func (r *reader) readFull(p []byte) error {
+	_, err := io.ReadFull(r.br, p)
+	return err
+}
+
+// discard discards exactly size bytes.
+func (r *reader) discard(size uint32) error {
+	n, err := r.br.Discard(int(size))
+	if uint32(n) < size && err == io.EOF {
+		err = io.ErrUnexpectedEOF
+	}
 	return err
 }
 
@@ -78,10 +87,12 @@ func (r *reader) decodeFrame() error {
 	if magic >= skipFrameMagicStart && magic <= skipFrameMagicEnd {
 		skipSize, err := r.littleEndian(4)
 		if err != nil {
-			return err
+			return fmt.Errorf("missing skippable frame size")
 		}
-		_, err = r.br.Discard(int(skipSize))
-		return err
+		if err := r.discard(uint32(skipSize)); err != nil {
+			return fmt.Errorf("missing skippable frame data")
+		}
+		return nil
 	}
 	if magic != frameMagicNumber {
 		return fmt.Errorf("not a zstd frame")
@@ -176,7 +187,7 @@ func (r *reader) decodeBlock() error {
 	// TODO: block size limits
 	switch blockType {
 	case blockTypeRaw:
-		err := r.readAll(r.window[r.decpos : r.decpos+blockSize])
+		err := r.readFull(r.window[r.decpos : r.decpos+blockSize])
 		if err != nil {
 			return err
 		}
@@ -222,7 +233,7 @@ func (r *reader) decodeBlockCompressed(blockSize uint) error {
 		}
 		regSize := b >> 3
 		stream = make([]byte, regSize)
-		if err := r.readAll(stream); err != nil {
+		if err := r.readFull(stream); err != nil {
 			return err
 		}
 		litSectionSize += uint(regSize)
@@ -232,7 +243,7 @@ func (r *reader) decodeBlockCompressed(blockSize uint) error {
 	// sequences section
 	seqSectionSize := blockSize - litSectionSize
 	seqBs := make([]byte, seqSectionSize)
-	if err := r.readAll(seqBs); err != nil {
+	if err := r.readFull(seqBs); err != nil {
 		return err
 	}
 	numSeq := uint64(0)
