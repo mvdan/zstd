@@ -12,7 +12,8 @@ import (
 
 // limits
 const (
-	limitFrameContentSize = 8 << 20 // 8MB
+	minWindowSize    = 1 << 10 // 1KB
+	maxFrameContSize = 8 << 20 // 8MB
 )
 
 const (
@@ -22,7 +23,7 @@ const (
 func NewReader(r io.Reader) io.Reader {
 	return &reader{
 		br:     bufio.NewReader(r),
-		window: make([]byte, 4096),
+		window: make([]byte, minWindowSize),
 	}
 }
 
@@ -83,22 +84,24 @@ func (r *reader) decodeFrame() error {
 		return fmt.Errorf("zstd frame reserved bit was set")
 	}
 
-	contChecksum := (frameHeader >> 2) & 1
-
-	dictIDFlag := frameHeader & 3
-	dictIDFieldSize := dictIDFieldSizes[dictIDFlag]
-
 	if singleSegment == 0 {
 		// window descriptor
 		panic("TODO")
 	}
 
-	// dictionary ID
-	dictID, err := r.littleEndian(dictIDFieldSize)
-	if err != nil {
-		return err
+	contChecksum := (frameHeader >> 2) & 1
+
+	dictIDFlag := frameHeader & 3
+	dictIDFieldSize := dictIDFieldSizes[dictIDFlag]
+	if dictIDFieldSize > 0 {
+		// dictionary ID
+		dictID, err := r.littleEndian(dictIDFieldSize)
+		if err != nil {
+			return err
+		}
+		_ = dictID
+		panic("TODO: dictionaries")
 	}
-	_ = dictID
 
 	frameContSize, err := r.littleEndian(fcsFieldSize)
 	if err != nil {
@@ -108,8 +111,8 @@ func (r *reader) decodeFrame() error {
 		frameContSize += 256
 	}
 
-	if frameContSize > limitFrameContentSize {
-		panic("zstd frame content size is too big")
+	if frameContSize > maxFrameContSize {
+		return fmt.Errorf("zstd frame content size is too big")
 	}
 	decstart := r.decpos
 	for {
@@ -160,7 +163,7 @@ func (r *reader) decodeBlock() error {
 			return err
 		}
 	default:
-		panic("unsupported block type")
+		panic("unimplemented block type")
 	}
 	if lastBlock == 1 {
 		return errLastBlock
@@ -181,7 +184,7 @@ func (r *reader) decodeBlockCompressed(blockSize uint64) error {
 		// literals section
 		sizeFormat := (b >> 2) & 1
 		if sizeFormat == 1 {
-			panic("TODO")
+			panic("TODO: other size formats")
 		}
 		regSize := b >> 3
 		stream = make([]byte, regSize)
@@ -190,7 +193,7 @@ func (r *reader) decodeBlockCompressed(blockSize uint64) error {
 		}
 		litSectionSize += uint64(regSize)
 	default:
-		panic("unsupported lit block type")
+		panic("unimplemented lit block type")
 	}
 	// sequences section
 	seqSectionSize := blockSize - litSectionSize
@@ -219,7 +222,7 @@ func (r *reader) decodeBlockCompressed(blockSize uint64) error {
 	seqBs = seqBs[1:]
 	reserved := b0 & 3
 	if reserved != 0 {
-		panic("symbol compression modes had a non-zero reserved field")
+		return fmt.Errorf("symbol compression modes had a non-zero reserved field")
 	}
 
 	litLengthTable := r.readFSETable(b0>>6,
@@ -276,7 +279,7 @@ func (r *reader) readFSETable(mode byte, predefined *fseTable) *fseTable {
 	case compModePredefined:
 		return predefined
 	default:
-		panic("unsupported compression type")
+		panic("unimplemented FSE table compression mode")
 	}
 }
 
