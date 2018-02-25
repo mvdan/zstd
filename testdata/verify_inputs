@@ -1,0 +1,29 @@
+#!/bin/bash
+
+# This script uses the reference zstd implementation to verify that:
+#  * all inputs in good/*.zst are valid
+#  * all inputs in bad/*.zst are invalid
+
+failed=false
+
+for f in good/*.zst; do
+	out=$(zstd -d $f -o /dev/null 2>&1)
+	if [[ $? -ne 0 ]]; then
+		echo "$f is not valid:"
+		echo $out | sed 's/^[^ ]* : //'
+		echo
+		failed=true
+	fi
+done
+
+for f in bad/*.zst; do
+	out=$(zstd -d $f -o /dev/null 2>&1)
+	if [[ $? -eq 0 ]]; then
+		echo "$f is valid"
+		failed=true
+	fi
+done
+
+if $failed; then
+	exit 1
+fi
