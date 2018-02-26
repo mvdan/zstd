@@ -2,6 +2,7 @@ package zstd
 
 import (
 	"flag"
+	"fmt"
 	"io/ioutil"
 	"os"
 	"path/filepath"
@@ -56,12 +57,9 @@ func testReadBad(t *testing.T, wantPath string) {
 
 	r := NewReader(f)
 	_, err = ioutil.ReadAll(r)
-	if err == nil {
-		t.Fatal("got a nil error")
-	}
 
 	// easier to read/modify with a newline
-	got := err.Error() + "\n"
+	got := fmt.Sprintf("%v\n", err)
 	checkMatch(t, wantPath, got)
 }
 

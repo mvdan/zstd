@@ -39,6 +39,8 @@ func NewReader(r io.Reader) io.Reader {
 type reader struct {
 	br *bufio.Reader
 
+	midFrame bool
+
 	window  []byte
 	decpos  uint
 	readpos uint
@@ -71,18 +73,31 @@ func (r *reader) discard(size uint32) error {
 }
 
 func (r *reader) Read(p []byte) (int, error) {
-	var err error
-	for r.readpos+uint(len(p)) >= r.decpos && err == nil {
-		err = r.decodeFrame()
-	}
+	err := r.decodeAtLeast(uint(len(p)))
 	n := copy(p, r.window[r.readpos:r.decpos])
 	r.readpos += uint(n)
 	return n, err
 }
 
-// decodeFrame decodes an entire zstd frame. An error is returned if the
-// frame was malformed, illegal, or missing bytes.
-func (r *reader) decodeFrame() error {
+func (r *reader) decodeAtLeast(size uint) error {
+	for r.readpos+size >= r.decpos {
+		if !r.midFrame {
+			if err := r.decodeFrameHeader(); err != nil {
+				return err
+			}
+			continue
+		}
+		if err := r.decodeBlock(); err != nil && err != io.EOF {
+			return err
+		}
+	}
+	return nil
+}
+
+// decodeFrameHeader decodes the magic number and header of a zstd
+// frame. An error is returned if the frame was malformed, illegal, or
+// missing bytes.
+func (r *reader) decodeFrameHeader() error {
 	// frame magic number
 	magic, err := r.littleEndian(4)
 	if err != nil {
@@ -165,29 +180,9 @@ func (r *reader) decodeFrame() error {
 			r.hash.Reset()
 		}
 	}
-
-	for {
-		if err := r.decodeBlock(); err == errLastBlock {
-			break
-		} else if err != io.EOF && err != nil {
-			return err
-		}
-	}
-
-	if r.hashing {
-		wantSum, err := r.littleEndian(4)
-		if err != nil {
-			return fmt.Errorf("missing frame xxhash")
-		}
-		gotSum := r.hash.Sum64() & 0xFFFFFFFF
-		if wantSum != gotSum {
-			return fmt.Errorf("frame xxhash mismatch")
-		}
-	}
+	r.midFrame = true
 	return nil
 }
-
-var errLastBlock = fmt.Errorf("last block")
 
 // decodeBlock decodes an entire zstd block within a frame. An error is
 // returned if the block was malformed, illegal, or missing bytes.
@@ -230,8 +225,19 @@ func (r *reader) decodeBlock() error {
 	if r.hashing {
 		r.hash.Write(r.window[startpos:r.decpos])
 	}
-	if lastBlock == 1 {
-		return errLastBlock
+	if lastBlock == 0 {
+		return nil
+	}
+	r.midFrame = false
+	if r.hashing {
+		wantSum, err := r.littleEndian(4)
+		if err != nil {
+			return fmt.Errorf("missing frame xxhash")
+		}
+		gotSum := r.hash.Sum64() & 0xFFFFFFFF
+		if wantSum != gotSum {
+			return fmt.Errorf("frame xxhash mismatch")
+		}
 	}
 	return nil
 }
