@@ -150,7 +150,7 @@ func (r *reader) decodeFrame() error {
 	for {
 		if err := r.decodeBlock(); err == errLastBlock {
 			break
-		} else if err != nil {
+		} else if err != io.EOF && err != nil {
 			return err
 		}
 	}
@@ -159,7 +159,7 @@ func (r *reader) decodeFrame() error {
 		data := r.window[decstart:r.decpos]
 		wantSum, err := r.littleEndian(4)
 		if err != nil {
-			return err
+			return fmt.Errorf("missing frame xxhash")
 		}
 		gotSum := xxhash.Sum64(data) & 0xFFFFFFFF
 		if wantSum != gotSum {
@@ -177,7 +177,7 @@ func (r *reader) decodeBlock() error {
 	// block header
 	blockHeader, err := r.littleEndian(3)
 	if err != nil {
-		return err
+		return fmt.Errorf("missing block header")
 	}
 	lastBlock := blockHeader & 1
 
@@ -189,7 +189,7 @@ func (r *reader) decodeBlock() error {
 	case blockTypeRaw:
 		err := r.readFull(r.window[r.decpos : r.decpos+blockSize])
 		if err != nil {
-			return err
+			return fmt.Errorf("missing raw block content")
 		}
 		r.decpos += blockSize
 	case blockTypeRLE:
