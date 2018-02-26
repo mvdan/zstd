@@ -34,6 +34,7 @@ This is the current progress of the decoder.
       - [x] Other offsets
   - [x] XXH64 frame content checksum
 - [x] Skippable frames
+- [ ] Dictionaries
 
 It should be able to handle simple zstd frames, but it will easily break
 down with complex ones as it is missing many pieces.
