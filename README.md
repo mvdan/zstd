@@ -16,23 +16,23 @@ However, testing and contributions are very much welcome.
 This is the current progress of the decoder.
 
 - [x] Zstandard frames
-  - [x] Blocks
-    - [x] Raw blocks
-    - [x] RLE blocks
-    - [x] Compressed blocks
-      - [x] Literals section
-        - [x] Raw literals block
-        - [ ] RLE literals block
-        - [ ] Compressed literals block
-        - [ ] Treeless literals block
-      - [x] Sequences section
-        - [x] Predefined mode
-        - [ ] RLE mode
-        - [ ] Repeat mode
-        - [ ] FSE compression mode
-      - [x] Sequence execution
-        - [x] Repeat offsets
-        - [x] Other offsets
+  - [x] Raw blocks
+  - [x] RLE blocks
+  - [x] Compressed blocks
+    - [x] Literals section
+      - [x] Raw literals block
+      - [ ] RLE literals block
+      - [ ] Compressed literals block
+      - [ ] Treeless literals block
+    - [x] Sequences section
+      - [x] Predefined mode
+      - [ ] RLE mode
+      - [ ] Repeat mode
+      - [ ] FSE compression mode
+    - [x] Sequence execution
+      - [x] Repeat offsets
+      - [x] Other offsets
+  - [x] XXH64 frame content checksum
 - [x] Skippable frames
 
 It should be able to handle simple zstd frames, but it will easily break
