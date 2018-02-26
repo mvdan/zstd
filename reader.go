@@ -293,26 +293,26 @@ func (r *reader) decodeBlockCompressed(blockSize uint) error {
 	offsetState := bitr.read(offsetTable.accLog)
 	matchLengthState := bitr.read(matchLengthTable.accLog)
 
-	for i := uint64(0); i < numSeq; i++ {
+	for {
 		offsetCode := offsetTable.symbol[offsetState]
-		offset := (1 << offsetCode) + uint(bitr.read(offsetCode))
+		offset := (1 << offsetCode) + bitr.read(offsetCode)
 
 		matchLengthCode := matchLengthTable.symbol[matchLengthState]
 		matchLength := uint(matchLengthBaselines[matchLengthCode]) +
-			uint(bitr.read(matchLengthExtraBits[matchLengthCode]))
+			bitr.read(matchLengthExtraBits[matchLengthCode])
 
 		litLengthCode := litLengthTable.symbol[litLengthState]
 		litLength := uint(litLengthBaselines[litLengthCode]) +
-			uint(bitr.read(litLengthExtraBits[litLengthCode]))
+			bitr.read(litLengthExtraBits[litLengthCode])
 
 		// sequence execution
 		copy(r.window[r.decpos:], stream[:litLength])
 		r.decpos += litLength
 		switch offset {
 		case 1:
-			for n := uint(0); n < matchLength; n += litLength {
-				copy(r.window[r.decpos:], stream[:litLength])
-				r.decpos += litLength
+			for n := uint(0); n < matchLength; n += 1 {
+				r.decpos += uint(copy(r.window[r.decpos:],
+					r.window[r.decpos-1:r.decpos]))
 			}
 		case 2, 3:
 			panic("TODO: unimplemented offset")
@@ -321,9 +321,18 @@ func (r *reader) decodeBlockCompressed(blockSize uint) error {
 			copy(r.window[r.decpos:], r.window[start:start+matchLength])
 			r.decpos += matchLength
 		}
-		if i == numSeq-1 {
-			r.decpos += uint(copy(r.window[r.decpos:], stream[litLength:]))
+		stream = stream[litLength:]
+		if numSeq--; numSeq == 0 {
+			r.decpos += uint(copy(r.window[r.decpos:], stream))
+			break
 		}
+
+		litLengthState = uint(litLengthTable.base[litLengthState]) +
+			bitr.read(litLengthTable.numBits[litLengthState])
+		matchLengthState = uint(matchLengthTable.base[matchLengthState]) +
+			bitr.read(matchLengthTable.numBits[matchLengthState])
+		offsetState = uint(offsetTable.base[offsetState]) +
+			bitr.read(offsetTable.numBits[offsetState])
 	}
 	if !bitr.empty() {
 		return fmt.Errorf("sequence bitstream was corrupted")
@@ -370,9 +379,9 @@ func (b *backwardBitReader) skipPadding() {
 	b.curbits = 8 - skip
 }
 
-func (b *backwardBitReader) read(n uint8) uint64 {
+func (b *backwardBitReader) read(n uint8) uint {
 	// TODO: this can very likely be done more efficiently
-	res := uint64(0)
+	res := uint(0)
 	for i := uint8(0); i < n; i++ {
 		if b.curbits == 0 {
 			b.advance()
