@@ -318,8 +318,20 @@ func (r *reader) decodeBlockCompressed(blockSize uint) error {
 			panic("TODO: unimplemented offset")
 		default:
 			start := r.decpos - (offset - 3)
-			copy(r.window[r.decpos:], r.window[start:start+matchLength])
-			r.decpos += matchLength
+			chunk := matchLength
+			if max := offset - 3; chunk > max {
+				chunk = max
+			}
+			end := start + matchLength
+			for start < end {
+				next := start + chunk
+				if next > end {
+					next = end
+				}
+				r.decpos += uint(copy(r.window[r.decpos:],
+					r.window[start:next]))
+				start = next
+			}
 		}
 		stream = stream[litLength:]
 		if numSeq--; numSeq == 0 {
