@@ -7,12 +7,25 @@
 failed=false
 
 for f in good/*.zst; do
-	out=$(zstd -d $f -o /dev/null 2>&1)
+	want=${f%%.zst}
+	rm -f got
+	out=$(zstd -d $f -o got 2>&1)
 	if [[ $? -ne 0 ]]; then
 		echo "$f is not valid:"
 		echo $out | sed 's/^[^ ]* : //'
 		echo
 		failed=true
+		continue
+	fi
+	# we must use files, as otherwise shell command substution and
+	# vars are going to nuke whitespace and null characters
+	diff=$(diff -u $want got)
+	if [[ $? -ne 0 ]]; then
+		echo "$f has mismatching output:"
+		echo "$diff" | sed 1,2d
+		echo
+		failed=true
+		continue
 	fi
 done
 
@@ -24,6 +37,7 @@ for f in bad/*.zst; do
 	fi
 done
 
+rm -f got
 if $failed; then
 	exit 1
 fi
