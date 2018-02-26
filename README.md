@@ -31,8 +31,8 @@ This is the current progress of the decoder.
         - [ ] Repeat mode
         - [ ] FSE compression mode
       - [x] Sequence execution
-        - [x] Repeated offsets
-        - [ ] Other offsets
+        - [x] Repeat offsets
+        - [x] Other offsets
 - [x] Skippable frames
 
 It should be able to handle simple zstd frames, but it will easily break

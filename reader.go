@@ -285,31 +285,35 @@ func (r *reader) decodeBlockCompressed(blockSize uint) error {
 
 	for i := uint64(0); i < numSeq; i++ {
 		offsetCode := offsetTable.symbol[offsetState]
-		offset := (1 << offsetCode) + bitr.read(offsetCode)
+		offset := (1 << offsetCode) + uint(bitr.read(offsetCode))
 
 		matchLengthCode := matchLengthTable.symbol[matchLengthState]
-		matchLength := uint64(matchLengthBaselines[matchLengthCode]) +
-			bitr.read(matchLengthExtraBits[matchLengthCode])
+		matchLength := uint(matchLengthBaselines[matchLengthCode]) +
+			uint(bitr.read(matchLengthExtraBits[matchLengthCode]))
 
 		litLengthCode := litLengthTable.symbol[litLengthState]
-		litLength := uint64(litLengthBaselines[litLengthCode]) +
-			bitr.read(litLengthExtraBits[litLengthCode])
+		litLength := uint(litLengthBaselines[litLengthCode]) +
+			uint(bitr.read(litLengthExtraBits[litLengthCode]))
 
 		// sequence execution
 		copy(r.window[r.decpos:], stream[:litLength])
-		r.decpos += uint(litLength)
+		r.decpos += litLength
 		switch offset {
 		case 1:
-			for n := uint64(0); n < matchLength; n += litLength {
+			for n := uint(0); n < matchLength; n += litLength {
 				length := litLength
 				if n+litLength >= matchLength {
-					length = uint64(len(stream))
+					length = uint(len(stream))
 				}
 				copy(r.window[r.decpos:], stream[:length])
-				r.decpos += uint(length)
+				r.decpos += length
 			}
-		default:
+		case 2, 3:
 			panic("TODO: unimplemented offset")
+		default:
+			start := r.decpos - (offset - 3)
+			copy(r.window[r.decpos:], r.window[start:start+matchLength])
+			r.decpos += matchLength
 		}
 	}
 	if !bitr.empty() {
