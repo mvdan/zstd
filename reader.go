@@ -69,7 +69,7 @@ func (r *reader) discard(size uint32) error {
 
 func (r *reader) Read(p []byte) (int, error) {
 	var err error
-	for (r.readpos+uint(len(p))) >= r.decpos && err == nil {
+	for r.readpos+uint(len(p)) >= r.decpos && err == nil {
 		err = r.decodeFrame()
 	}
 	n := copy(p, r.window[r.readpos:r.decpos])
@@ -106,12 +106,12 @@ func (r *reader) decodeFrame() error {
 	fcsFlag := frameHeader >> 6
 	fcsFieldSize := fcsFieldSizes[fcsFlag]
 
-	singleSegment := (frameHeader >> 5) & 1
+	singleSegment := frameHeader >> 5 & 1
 	if fcsFlag == 0 && singleSegment != 0 {
 		fcsFieldSize = 1
 	}
 
-	reservedBit := (frameHeader >> 3) & 1
+	reservedBit := frameHeader >> 3 & 1
 	if reservedBit != 0 {
 		return fmt.Errorf("zstd frame reserved bit was set")
 	}
@@ -121,7 +121,7 @@ func (r *reader) decodeFrame() error {
 		panic("TODO")
 	}
 
-	contChecksum := (frameHeader >> 2) & 1
+	contChecksum := frameHeader >> 2 & 1
 
 	dictIDFlag := frameHeader & 3
 	dictIDFieldSize := dictIDFieldSizes[dictIDFlag]
@@ -181,7 +181,7 @@ func (r *reader) decodeBlock() error {
 	}
 	lastBlock := blockHeader & 1
 
-	blockType := (blockHeader >> 1) & 3
+	blockType := blockHeader >> 1 & 3
 
 	blockSize := uint(blockHeader >> 3)
 	// TODO: block size limits
@@ -227,7 +227,7 @@ func (r *reader) decodeBlockCompressed(blockSize uint) error {
 	switch litBlockType {
 	case litBlockTypeRaw:
 		// literals section
-		sizeFormat := (b >> 2) & 3
+		sizeFormat := b >> 2 & 3
 		regSize := uint(b >> 3)
 		switch sizeFormat {
 		case 0, 2: // 00, 10; 1 byte
@@ -262,12 +262,12 @@ func (r *reader) decodeBlockCompressed(blockSize uint) error {
 		seqBs = seqBs[1:]
 	} else if b0 < 255 {
 		b1 := uint64(seqBs[1])
-		numSeq = ((b0 - 128) << 8) + b1
+		numSeq = (b0-128)<<8 + b1
 		seqBs = seqBs[2:]
 	} else if b0 == 255 {
 		b1 := uint64(seqBs[1])
 		b2 := uint64(seqBs[2])
-		numSeq = b1 + (b2 << 8) + 0x7F00
+		numSeq = b1 + b2<<8 + 0x7F00
 		seqBs = seqBs[3:]
 	}
 	if numSeq == 0 {
@@ -282,9 +282,9 @@ func (r *reader) decodeBlockCompressed(blockSize uint) error {
 
 	litLengthTable := r.decodeFSETable(b0>>6,
 		&litLengthCodeDefaultTable)
-	offsetTable := r.decodeFSETable((b0>>4)&3,
+	offsetTable := r.decodeFSETable(b0>>4&3,
 		&offsetCodeDefaultTable)
-	matchLengthTable := r.decodeFSETable((b0>>2)&3,
+	matchLengthTable := r.decodeFSETable(b0>>2&3,
 		&matchLengthDefaultTable)
 
 	bitr := backwardBitReader{rem: seqBs}
@@ -295,7 +295,7 @@ func (r *reader) decodeBlockCompressed(blockSize uint) error {
 
 	for {
 		offsetCode := offsetTable.symbol[offsetState]
-		offset := (1 << offsetCode) + bitr.read(offsetCode)
+		offset := 1<<offsetCode + bitr.read(offsetCode)
 
 		matchLengthCode := matchLengthTable.symbol[matchLengthState]
 		matchLength := uint(matchLengthBaselines[matchLengthCode]) +
@@ -403,7 +403,7 @@ func (b *backwardBitReader) read(n uint8) uint {
 		b.curbits--
 
 		if bit != 0 {
-			res |= 1 << ((n - 1) - i)
+			res |= 1 << (n - 1 - i)
 		}
 	}
 	return res
