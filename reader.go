@@ -311,12 +311,8 @@ func (r *reader) decodeBlockCompressed(blockSize uint) error {
 		switch offset {
 		case 1:
 			for n := uint(0); n < matchLength; n += litLength {
-				length := litLength
-				if n+litLength >= matchLength {
-					length = uint(len(stream))
-				}
-				copy(r.window[r.decpos:], stream[:length])
-				r.decpos += length
+				copy(r.window[r.decpos:], stream[:litLength])
+				r.decpos += litLength
 			}
 		case 2, 3:
 			panic("TODO: unimplemented offset")
@@ -324,6 +320,9 @@ func (r *reader) decodeBlockCompressed(blockSize uint) error {
 			start := r.decpos - (offset - 3)
 			copy(r.window[r.decpos:], r.window[start:start+matchLength])
 			r.decpos += matchLength
+		}
+		if i == numSeq-1 {
+			r.decpos += uint(copy(r.window[r.decpos:], stream[litLength:]))
 		}
 	}
 	if !bitr.empty() {
