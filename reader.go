@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"encoding/binary"
 	"fmt"
+	"hash"
 	"io"
 	"math/bits"
 
@@ -41,6 +42,9 @@ type reader struct {
 	window  []byte
 	decpos  uint
 	readpos uint
+
+	hash    hash.Hash64
+	hashing bool
 }
 
 // littleEndian reads a little-endian unsigned integer of size bytes.
@@ -140,7 +144,7 @@ func (r *reader) decodeFrame() error {
 		return fmt.Errorf("zstd frame reserved bit was set")
 	}
 
-	contChecksum := frameHeader >> 2 & 1
+	r.hashing = frameHeader>>2&1 == 1
 
 	dictIDFlag := frameHeader & 3
 	dictIDFieldSize := dictIDFieldSizes[dictIDFlag]
@@ -154,7 +158,14 @@ func (r *reader) decodeFrame() error {
 		panic("TODO: dictionaries")
 	}
 
-	decstart := r.decpos
+	if r.hashing {
+		if r.hash == nil {
+			r.hash = xxhash.New()
+		} else {
+			r.hash.Reset()
+		}
+	}
+
 	for {
 		if err := r.decodeBlock(); err == errLastBlock {
 			break
@@ -163,13 +174,12 @@ func (r *reader) decodeFrame() error {
 		}
 	}
 
-	if contChecksum == 1 {
-		data := r.window[decstart:r.decpos]
+	if r.hashing {
 		wantSum, err := r.littleEndian(4)
 		if err != nil {
 			return fmt.Errorf("missing frame xxhash")
 		}
-		gotSum := xxhash.Sum64(data) & 0xFFFFFFFF
+		gotSum := r.hash.Sum64() & 0xFFFFFFFF
 		if wantSum != gotSum {
 			return fmt.Errorf("frame xxhash mismatch")
 		}
@@ -192,6 +202,7 @@ func (r *reader) decodeBlock() error {
 	blockType := blockHeader >> 1 & 3
 
 	blockSize := uint(blockHeader >> 3)
+	startpos := r.decpos
 	// TODO: block size limits
 	switch blockType {
 	case blockTypeRaw:
@@ -215,6 +226,9 @@ func (r *reader) decodeBlock() error {
 		}
 	default: // blockTypeReserved
 		return fmt.Errorf("reserved block type found")
+	}
+	if r.hashing {
+		r.hash.Write(r.window[startpos:r.decpos])
 	}
 	if lastBlock == 1 {
 		return errLastBlock
