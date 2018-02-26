@@ -81,3 +81,39 @@ func checkMatch(t *testing.T, wantPath, got string) {
 		t.Fatalf("\ngot:  %q\nwant: %q", got, want)
 	}
 }
+
+func checkSize(t *testing.T, want, got int) {
+	if want != got {
+		t.Fatalf("wanted size %v, got %v", want, got)
+	}
+}
+
+var largeTests = []struct {
+	name  string
+	check func(*testing.T, []byte)
+}{
+	{
+		"Zeros-100KiB",
+		func(t *testing.T, got []byte) {
+			checkSize(t, 100*(1<<10), len(got))
+		},
+	},
+}
+
+func TestReaderLarge(t *testing.T) {
+	dir := filepath.Join("testdata", "large")
+	for _, tc := range largeTests {
+		t.Run(tc.name, func(t *testing.T) {
+			f, err := os.Open(filepath.Join(dir, tc.name+".zst"))
+			if err != nil {
+				panic(err)
+			}
+			r := NewReader(f)
+			got, err := ioutil.ReadAll(r)
+			if err != nil {
+				t.Fatal(err)
+			}
+			tc.check(t, got)
+		})
+	}
+}

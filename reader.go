@@ -12,8 +12,8 @@ import (
 
 // limits
 const (
-	minWindowSize    = 1 << 10 // 1KB
-	maxFrameContSize = 8 << 20 // 8MB
+	minWindowSize = 1 << 10 // 1KB
+	maxWindowSize = 8 << 20 // 8MB
 )
 
 // magic numbers
@@ -31,8 +31,7 @@ const (
 // reader.
 func NewReader(r io.Reader) io.Reader {
 	return &reader{
-		br:     bufio.NewReader(r),
-		window: make([]byte, minWindowSize),
+		br: bufio.NewReader(r),
 	}
 }
 
@@ -73,6 +72,7 @@ func (r *reader) Read(p []byte) (int, error) {
 		err = r.decodeFrame()
 	}
 	n := copy(p, r.window[r.readpos:r.decpos])
+	r.readpos += uint(n)
 	return n, err
 }
 
@@ -111,14 +111,33 @@ func (r *reader) decodeFrame() error {
 		fcsFieldSize = 1
 	}
 
-	reservedBit := frameHeader >> 3 & 1
-	if reservedBit != 0 {
-		return fmt.Errorf("zstd frame reserved bit was set")
+	frameContSize, err := r.littleEndian(fcsFieldSize)
+	if err != nil {
+		return fmt.Errorf("missing frame content size")
+	}
+	if fcsFieldSize == 2 {
+		frameContSize += 256
 	}
 
+	windowSize := uint64(minWindowSize)
 	if singleSegment == 0 {
 		// window descriptor
 		panic("TODO")
+	} else if frameContSize > windowSize {
+		windowSize = frameContSize
+	}
+
+	if windowSize > maxWindowSize {
+		return fmt.Errorf("zstd window size is too big")
+	}
+
+	if r.window == nil {
+		r.window = make([]byte, windowSize)
+	}
+
+	reservedBit := frameHeader >> 3 & 1
+	if reservedBit != 0 {
+		return fmt.Errorf("zstd frame reserved bit was set")
 	}
 
 	contChecksum := frameHeader >> 2 & 1
@@ -135,17 +154,6 @@ func (r *reader) decodeFrame() error {
 		panic("TODO: dictionaries")
 	}
 
-	frameContSize, err := r.littleEndian(fcsFieldSize)
-	if err != nil {
-		return fmt.Errorf("missing frame content size")
-	}
-	if fcsFieldSize == 2 {
-		frameContSize += 256
-	}
-
-	if frameContSize > maxFrameContSize {
-		return fmt.Errorf("zstd frame content size is too big")
-	}
 	decstart := r.decpos
 	for {
 		if err := r.decodeBlock(); err == errLastBlock {
