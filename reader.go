@@ -227,16 +227,26 @@ func (r *reader) decodeBlockCompressed(blockSize uint) error {
 	switch litBlockType {
 	case litBlockTypeRaw:
 		// literals section
-		sizeFormat := (b >> 2) & 1
-		if sizeFormat == 1 {
-			panic("TODO: other size formats")
+		sizeFormat := (b >> 2) & 3
+		regSize := uint(b >> 3)
+		switch sizeFormat {
+		case 0, 2: // 00, 10; 1 byte
+		case 1: // 01; 2 bytes
+			litSectionSize++
+			regSize >>= 1
+			b, err := r.br.ReadByte()
+			if err != nil {
+				return err
+			}
+			regSize |= uint(b << 4)
+		case 3: // 11; 3 bytes
+			panic("TODO: Size_Format 11")
 		}
-		regSize := b >> 3
+		litSectionSize += regSize
 		stream = make([]byte, regSize)
 		if err := r.readFull(stream); err != nil {
 			return err
 		}
-		litSectionSize += uint(regSize)
 	default:
 		panic("unimplemented lit block type")
 	}
