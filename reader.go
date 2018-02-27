@@ -13,8 +13,10 @@ import (
 
 // limits
 const (
-	minWindowSize = 1 << 10 // 1KB
-	maxWindowSize = 8 << 20 // 8MB
+	minWindowSize = 1 << 10 // 1KiB
+	maxWindowSize = 8 << 20 // 8MiB
+
+	maxBlockSize = 128 << 10 // 128KiB
 )
 
 // magic numbers
@@ -41,9 +43,10 @@ type reader struct {
 
 	midFrame bool
 
-	window  []byte
-	decpos  uint
-	readpos uint
+	window     []byte
+	windowSize uint
+	decpos     uint
+	readpos    uint
 
 	hash    hash.Hash64
 	hashing bool
@@ -80,10 +83,16 @@ func (r *reader) Read(p []byte) (int, error) {
 }
 
 func (r *reader) decodeAtLeast(size uint) error {
+	if size > r.windowSize {
+		size = r.windowSize
+	}
 	for r.readpos+size >= r.decpos {
 		if !r.midFrame {
 			if err := r.decodeFrameHeader(); err != nil {
 				return err
+			}
+			if size > r.windowSize {
+				size = r.windowSize
 			}
 			continue
 		}
@@ -138,20 +147,33 @@ func (r *reader) decodeFrameHeader() error {
 		frameContSize += 256
 	}
 
-	windowSize := uint64(minWindowSize)
+	r.windowSize = minWindowSize
 	if singleSegment == 0 {
 		// window descriptor
-		panic("TODO")
-	} else if frameContSize > windowSize {
-		windowSize = frameContSize
+		b, err := r.br.ReadByte()
+		if err != nil {
+			return fmt.Errorf("missing frame window descriptor")
+		}
+		exponent := uint(b >> 3)
+		mantissa := uint(b & 7)
+
+		windowLog := 10 + exponent
+		windowBase := uint(1 << windowLog)
+		windowAdd := (windowBase / 8) * mantissa
+		r.windowSize = windowBase + windowAdd
+	} else if frameContSize > uint64(r.windowSize) {
+		r.windowSize = uint(frameContSize)
 	}
 
-	if windowSize > maxWindowSize {
+	if r.windowSize > maxWindowSize {
 		return fmt.Errorf("zstd window size is too big")
 	}
 
 	if r.window == nil {
-		r.window = make([]byte, windowSize)
+		// 3 times windowSize, so that we can slide windowSize
+		// bytes to the left when we're past 2/3rds of the
+		// window buffer.
+		r.window = make([]byte, 3*r.windowSize)
 	}
 
 	reservedBit := frameHeader >> 3 & 1
@@ -197,6 +219,20 @@ func (r *reader) decodeBlock() error {
 	blockType := blockHeader >> 1 & 3
 
 	blockSize := uint(blockHeader >> 3)
+	if blockSize > r.windowSize {
+		return fmt.Errorf("block size is larger than window size")
+	}
+	if blockSize > maxBlockSize {
+		return fmt.Errorf("block size is larger than 128KiB")
+	}
+
+	if r.decpos > r.windowSize*2 {
+		// slide window left by windowSize
+		copy(r.window[:r.windowSize], r.window[r.windowSize:])
+		r.decpos -= r.windowSize
+		r.readpos -= r.windowSize
+	}
+
 	startpos := r.decpos
 	// TODO: block size limits
 	switch blockType {

@@ -86,6 +86,25 @@ func checkSize(t *testing.T, want, got int) {
 	}
 }
 
+func checkByteAlphabet(t *testing.T, got []byte, list string) {
+	var set [256]bool
+	for _, b := range got {
+		set[b] = true
+	}
+	for i := 0; i < len(list); i++ {
+		b := list[i]
+		if !set[b] {
+			t.Errorf("missing byte: %q", b)
+		}
+		set[b] = false
+	}
+	for b, ok := range set {
+		if ok {
+			t.Errorf("unexpected byte: %q", b)
+		}
+	}
+}
+
 var largeTests = []struct {
 	name  string
 	check func(*testing.T, []byte)
@@ -94,6 +113,14 @@ var largeTests = []struct {
 		"Zeros-100KiB",
 		func(t *testing.T, got []byte) {
 			checkSize(t, 100*(1<<10), len(got))
+			checkByteAlphabet(t, got, "\x00")
+		},
+	},
+	{
+		"Zeros-10MiB",
+		func(t *testing.T, got []byte) {
+			checkSize(t, 10*(1<<20), len(got))
+			checkByteAlphabet(t, got, "\x00")
 		},
 	},
 }
