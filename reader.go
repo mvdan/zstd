@@ -41,7 +41,28 @@ func NewReader(r io.Reader) io.Reader {
 type reader struct {
 	br *bufio.Reader
 
-	midFrame bool
+	midFrame      bool
+	frameDecoded  uint64
+	frameContSize uint64
+
+	midSequence bool
+	blockSize   uint
+	isLastBlock bool
+	stream      []byte
+	numSeq      uint64
+
+	litLengthState   uint
+	offsetState      uint
+	matchLengthState uint
+	litLengthTable   *fseTable
+	offsetTable      *fseTable
+	matchLengthTable *fseTable
+
+	seqBitReader   backwardBitReader
+	seqLitLength   uint
+	seqOffset      uint
+	seqMatchLength uint
+	seqProgress    uint
 
 	window     []byte
 	windowSize uint
@@ -96,11 +117,24 @@ func (r *reader) decodeAtLeast(size uint) error {
 			}
 			continue
 		}
-		if err := r.decodeBlock(); err != nil && err != io.EOF {
+		if r.midSequence {
+			if err := r.decodeSequences(); err != nil && err != io.EOF {
+				return err
+			}
+			continue
+		}
+		if err := r.decodeBlockHeader(); err != nil && err != io.EOF {
 			return err
 		}
 	}
 	return nil
+}
+
+func (r *reader) decoded(data []byte) {
+	r.decpos += uint(copy(r.window[r.decpos:], data))
+	if r.hashing {
+		r.hash.Write(data)
+	}
 }
 
 // decodeFrameHeader decodes the magic number and header of a zstd
@@ -139,13 +173,14 @@ func (r *reader) decodeFrameHeader() error {
 		fcsFieldSize = 1
 	}
 
-	frameContSize, err := r.littleEndian(fcsFieldSize)
+	r.frameContSize, err = r.littleEndian(fcsFieldSize)
 	if err != nil {
 		return fmt.Errorf("missing frame content size")
 	}
 	if fcsFieldSize == 2 {
-		frameContSize += 256
+		r.frameContSize += 256
 	}
+	r.frameDecoded = 0
 
 	r.windowSize = minWindowSize
 	if singleSegment == 0 {
@@ -161,8 +196,8 @@ func (r *reader) decodeFrameHeader() error {
 		windowBase := uint(1 << windowLog)
 		windowAdd := (windowBase / 8) * mantissa
 		r.windowSize = windowBase + windowAdd
-	} else if frameContSize > uint64(r.windowSize) {
-		r.windowSize = uint(frameContSize)
+	} else if r.frameContSize > uint64(r.windowSize) {
+		r.windowSize = uint(r.frameContSize)
 	}
 
 	if r.windowSize > maxWindowSize {
@@ -208,21 +243,21 @@ func (r *reader) decodeFrameHeader() error {
 
 // decodeBlock decodes an entire zstd block within a frame. An error is
 // returned if the block was malformed, illegal, or missing bytes.
-func (r *reader) decodeBlock() error {
+func (r *reader) decodeBlockHeader() error {
 	// block header
 	blockHeader, err := r.littleEndian(3)
 	if err != nil {
 		return fmt.Errorf("missing block header")
 	}
-	lastBlock := blockHeader & 1
+	r.isLastBlock = blockHeader & 1 == 1
 
 	blockType := blockHeader >> 1 & 3
 
-	blockSize := uint(blockHeader >> 3)
-	if blockSize > r.windowSize {
+	r.blockSize = uint(blockHeader >> 3)
+	if r.blockSize > r.windowSize {
 		return fmt.Errorf("block size is larger than window size")
 	}
-	if blockSize > maxBlockSize {
+	if r.blockSize > maxBlockSize {
 		return fmt.Errorf("block size is larger than 128KiB")
 	}
 
@@ -233,38 +268,41 @@ func (r *reader) decodeBlock() error {
 		r.readpos -= r.windowSize
 	}
 
-	startpos := r.decpos
 	// TODO: block size limits
 	switch blockType {
 	case blockTypeRaw:
-		err := r.readFull(r.window[r.decpos : r.decpos+blockSize])
-		if err != nil {
+		target := r.window[r.decpos : r.decpos+r.blockSize]
+		if err := r.readFull(target); err != nil {
 			return fmt.Errorf("missing raw block content")
 		}
-		r.decpos += blockSize
+		r.decoded(target)
 	case blockTypeRLE:
 		b, err := r.br.ReadByte()
 		if err != nil {
 			return err
 		}
-		for i := uint(0); i < blockSize; i++ {
-			r.window[r.decpos+i] = b
+		data := []byte{b}
+		// TODO: ridiculously slow
+		for i := uint(0); i < r.blockSize; i++ {
+			r.decoded(data)
 		}
-		r.decpos += blockSize
 	case blockTypeCompressed:
-		if err := r.decodeBlockCompressed(blockSize); err != nil {
-			return err
-		}
+		return r.decodeBlockCompressed()
 	default: // blockTypeReserved
 		return fmt.Errorf("reserved block type found")
 	}
-	if r.hashing {
-		r.hash.Write(r.window[startpos:r.decpos])
-	}
-	if lastBlock == 0 {
+	return r.endBlock()
+}
+
+func (r *reader) endBlock() error {
+	r.frameDecoded += uint64(r.blockSize)
+	if !r.isLastBlock {
 		return nil
 	}
 	r.midFrame = false
+	if r.frameDecoded != r.frameContSize {
+		// TODO: fix this
+	}
 	if r.hashing {
 		wantSum, err := r.littleEndian(4)
 		if err != nil {
@@ -280,14 +318,13 @@ func (r *reader) decodeBlock() error {
 
 // decodeBlockCompressed is decoupled from decodeBlock to handle
 // compressed blocks, the most complex type of them.
-func (r *reader) decodeBlockCompressed(blockSize uint) error {
+func (r *reader) decodeBlockCompressed() error {
 	b, err := r.br.ReadByte()
 	if err != nil {
 		return err
 	}
 	litBlockType := b & 3
 	litSectionSize := uint(1)
-	var stream []byte
 	switch litBlockType {
 	case litBlockTypeRaw:
 		// literals section
@@ -307,34 +344,34 @@ func (r *reader) decodeBlockCompressed(blockSize uint) error {
 			panic("TODO: Size_Format 11")
 		}
 		litSectionSize += regSize
-		stream = make([]byte, regSize)
-		if err := r.readFull(stream); err != nil {
+		r.stream = make([]byte, regSize)
+		if err := r.readFull(r.stream); err != nil {
 			return err
 		}
 	default:
 		panic("unimplemented lit block type")
 	}
 	// sequences section
-	seqSectionSize := blockSize - litSectionSize
+	seqSectionSize := r.blockSize - litSectionSize
 	seqBs := make([]byte, seqSectionSize)
 	if err := r.readFull(seqBs); err != nil {
 		return err
 	}
-	numSeq := uint64(0)
+	r.numSeq = uint64(0)
 	if b0 := uint64(seqBs[0]); b0 < 128 {
-		numSeq = b0
+		r.numSeq = b0
 		seqBs = seqBs[1:]
 	} else if b0 < 255 {
 		b1 := uint64(seqBs[1])
-		numSeq = (b0-128)<<8 + b1
+		r.numSeq = (b0-128)<<8 + b1
 		seqBs = seqBs[2:]
 	} else if b0 == 255 {
 		b1 := uint64(seqBs[1])
 		b2 := uint64(seqBs[2])
-		numSeq = b1 + b2<<8 + 0x7F00
+		r.numSeq = b1 + b2<<8 + 0x7F00
 		seqBs = seqBs[3:]
 	}
-	if numSeq == 0 {
+	if r.numSeq == 0 {
 		panic("TODO: sequence section stops")
 	}
 	b0 := seqBs[0]
@@ -344,76 +381,90 @@ func (r *reader) decodeBlockCompressed(blockSize uint) error {
 		return fmt.Errorf("symbol compression modes had a non-zero reserved field")
 	}
 
-	litLengthTable := r.decodeFSETable(b0>>6,
+	r.litLengthTable = r.decodeFSETable(b0>>6,
 		&litLengthCodeDefaultTable)
-	offsetTable := r.decodeFSETable(b0>>4&3,
+	r.offsetTable = r.decodeFSETable(b0>>4&3,
 		&offsetCodeDefaultTable)
-	matchLengthTable := r.decodeFSETable(b0>>2&3,
+	r.matchLengthTable = r.decodeFSETable(b0>>2&3,
 		&matchLengthDefaultTable)
 
-	bitr := backwardBitReader{rem: seqBs}
-	bitr.skipPadding()
-	litLengthState := bitr.read(litLengthTable.accLog)
-	offsetState := bitr.read(offsetTable.accLog)
-	matchLengthState := bitr.read(matchLengthTable.accLog)
+	r.seqBitReader = backwardBitReader{rem: seqBs}
+	r.seqBitReader.skipPadding()
+	r.litLengthState = r.seqBitReader.read(r.litLengthTable.accLog)
+	r.offsetState = r.seqBitReader.read(r.offsetTable.accLog)
+	r.matchLengthState = r.seqBitReader.read(r.matchLengthTable.accLog)
+	return r.decodeSequences()
+}
 
+func (r *reader) decodeSequences() error {
 	for {
-		offsetCode := offsetTable.symbol[offsetState]
-		offset := 1<<offsetCode + bitr.read(offsetCode)
+		if !r.midSequence {
+			offsetCode := r.offsetTable.symbol[r.offsetState]
+			r.seqOffset = 1<<offsetCode + r.seqBitReader.read(offsetCode)
 
-		matchLengthCode := matchLengthTable.symbol[matchLengthState]
-		matchLength := uint(matchLengthBaselines[matchLengthCode]) +
-			bitr.read(matchLengthExtraBits[matchLengthCode])
+			matchLengthCode := r.matchLengthTable.symbol[r.matchLengthState]
+			r.seqMatchLength = uint(matchLengthBaselines[matchLengthCode]) +
+				r.seqBitReader.read(matchLengthExtraBits[matchLengthCode])
 
-		litLengthCode := litLengthTable.symbol[litLengthState]
-		litLength := uint(litLengthBaselines[litLengthCode]) +
-			bitr.read(litLengthExtraBits[litLengthCode])
+			litLengthCode := r.litLengthTable.symbol[r.litLengthState]
+			r.seqLitLength = uint(litLengthBaselines[litLengthCode]) +
+				r.seqBitReader.read(litLengthExtraBits[litLengthCode])
 
-		// sequence execution
-		copy(r.window[r.decpos:], stream[:litLength])
-		r.decpos += litLength
-		switch offset {
+			// sequence execution
+			r.decoded(r.stream[:r.seqLitLength])
+			r.seqProgress = 0
+		}
+		switch r.seqOffset {
 		case 1:
-			for n := uint(0); n < matchLength; n += 1 {
-				r.decpos += uint(copy(r.window[r.decpos:],
-					r.window[r.decpos-1:r.decpos]))
+			for ; r.seqProgress < r.seqMatchLength; r.seqProgress++ {
+				if r.decpos > r.windowSize*2 {
+					if r.readpos < r.windowSize {
+						r.midSequence = true
+						return nil
+					}
+					// slide window left by windowSize
+					copy(r.window[:r.windowSize], r.window[r.windowSize:])
+					r.decpos -= r.windowSize
+					r.readpos -= r.windowSize
+				}
+				r.decoded(r.window[r.decpos-1:r.decpos])
 			}
+			r.midSequence = false
 		case 2, 3:
 			panic("TODO: unimplemented offset")
 		default:
-			start := r.decpos - (offset - 3)
-			chunk := matchLength
-			if max := offset - 3; chunk > max {
+			start := r.decpos - (r.seqOffset - 3)
+			chunk := r.seqMatchLength
+			if max := r.seqOffset - 3; chunk > max {
 				chunk = max
 			}
-			end := start + matchLength
+			end := start + r.seqMatchLength
 			for start < end {
 				next := start + chunk
 				if next > end {
 					next = end
 				}
-				r.decpos += uint(copy(r.window[r.decpos:],
-					r.window[start:next]))
+				r.decoded(r.window[start:next])
 				start = next
 			}
 		}
-		stream = stream[litLength:]
-		if numSeq--; numSeq == 0 {
-			r.decpos += uint(copy(r.window[r.decpos:], stream))
+		r.stream = r.stream[r.seqLitLength:]
+		if r.numSeq--; r.numSeq == 0 {
+			r.decoded(r.stream)
 			break
 		}
 
-		litLengthState = uint(litLengthTable.base[litLengthState]) +
-			bitr.read(litLengthTable.numBits[litLengthState])
-		matchLengthState = uint(matchLengthTable.base[matchLengthState]) +
-			bitr.read(matchLengthTable.numBits[matchLengthState])
-		offsetState = uint(offsetTable.base[offsetState]) +
-			bitr.read(offsetTable.numBits[offsetState])
+		r.litLengthState = uint(r.litLengthTable.base[r.litLengthState]) +
+			r.seqBitReader.read(r.litLengthTable.numBits[r.litLengthState])
+		r.matchLengthState = uint(r.matchLengthTable.base[r.matchLengthState]) +
+			r.seqBitReader.read(r.matchLengthTable.numBits[r.matchLengthState])
+		r.offsetState = uint(r.offsetTable.base[r.offsetState]) +
+			r.seqBitReader.read(r.offsetTable.numBits[r.offsetState])
 	}
-	if !bitr.empty() {
+	if !r.seqBitReader.empty() {
 		return fmt.Errorf("sequence bitstream was corrupted")
 	}
-	return nil
+	return r.endBlock()
 }
 
 // decodeFSETable decodes a Finite State Entropy table within a
