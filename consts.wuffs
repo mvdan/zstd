@@ -7,3 +7,4 @@ pri const blockTypeRLE u8 = 1
 pri const blockTypeCompressed u8 = 2
 
 pri const minWindowSize u64 = 1028 // 1KiB
+pri const maxBlockSize u32 = 131072 // 128KiB
