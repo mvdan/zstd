@@ -1,0 +1,10 @@
+#!/bin/sh
+
+in=testdata/good/block_raw.zst
+want=testdata/good/block_raw
+
+set -e
+
+./zstd <$in >got
+diff $want got
+rm -f got

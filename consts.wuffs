@@ -1,0 +1,8 @@
+pri const frameMagicNumber u32 = 0xFD2FB528
+
+pri const fcsFieldSizes[4] u8 = $(0, 2, 4, 8)
+
+pri const blockTypeRaw u8 = 0
+pri const blockTypeRLE u8 = 1
+pri const blockTypeCompressed u8 = 2
+

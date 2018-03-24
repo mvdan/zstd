@@ -1,0 +1,81 @@
+packageid "zstd"
+
+pub struct decoder?(
+)
+
+pub error "not a zstd frame"
+pub error "zstd frame reserved bit was set"
+pub error "reserved block type found"
+
+pub error "TODO"
+
+pub func decoder.decode?(dst writer1, src reader1)() {
+	var magic u32 = in.src.read_u32le?()
+	if magic != frameMagicNumber {
+		return error "not a zstd frame"
+	}
+
+	var frameHeader u8 = in.src.read_u8?()
+	
+	// TODO: replace frameHeader >> 6 with fcsFlag
+
+	var fcsFieldSize u8 = fcsFieldSizes[frameHeader >> 6]
+
+	var singleSegment u8 = (frameHeader >> 5) & 1
+	if ((frameHeader >> 6) == 0) and (singleSegment != 0) {
+		fcsFieldSize = 1
+	}
+
+	var frameContSize u64
+	if fcsFieldSize == 1 {
+		frameContSize = in.src.read_u8?() as u64
+	} else if fcsFieldSize == 2 {
+		frameContSize = in.src.read_u16le?() as u64
+		// TODO: an easier way to prove no overflow?
+		frameContSize = (frameContSize & 0xFFFF) + 256
+	} else if fcsFieldSize == 4 {
+		frameContSize = in.src.read_u32le?() as u64
+	} else if fcsFieldSize == 8 {
+		// TODO: read_u64le doesn't seem to compile
+	} else {
+		// TODO: prove this can't happen?
+	}
+
+	var windowSize u64 = 1 << 10 // minimum window, 1KiB
+	if singleSegment == 0 {
+		return error "TODO"
+	} else {
+		windowSize = frameContSize
+	}
+
+	if ((frameHeader >> 3) & 1) != 0 {
+		return error "zstd frame reserved bit was set"
+	}
+
+	var hashing bool = ((frameHeader >> 2) & 1) == 1
+	// TODO: do the hashing
+
+	// TODO: possibly read dictionary ID
+
+	// spaghetti code to read a three-byte little endian number
+	var blockLower u32 = in.src.read_u8?() as u32
+	var blockUpper u32 = in.src.read_u16le?() as u32
+	var blockHeader u32 = ((blockUpper & 0xFFFF) << 8) | blockLower
+
+	var isLastBlock bool = (blockHeader & 1) == 1
+
+	var blockType u8 = ((blockHeader >> 1) & 3) as u8
+
+	var blockSize u32 = blockHeader >> 3
+	// TODO: check block size is reasonable
+
+	if blockType == blockTypeRaw {
+		in.dst.copy_from_reader32(r:in.src, length:blockSize)
+	} else if blockType == blockTypeRLE {
+		return error "TODO"
+	} else if blockType == blockTypeCompressed {
+		return error "TODO"
+	} else {
+		return error "reserved block type found"
+	}
+}

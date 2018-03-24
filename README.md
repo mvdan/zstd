@@ -1,15 +1,30 @@
 # zstd
 
-[![GoDoc](https://godoc.org/mvdan.cc/zstd?status.svg)](https://godoc.org/mvdan.cc/zstd)
-[![Build Status](https://travis-ci.org/mvdan/zstd.svg?branch=master)](https://travis-ci.org/mvdan/zstd)
-
-	go get -u mvdan.cc/zstd
-
-An implementation from scratch of [Zstandard] in Go. It is being
+An implementation from scratch of [Zstandard] in [Wuffs]. It is being
 developed following the published [spec].
 
 This is very much a work in progress, so it is not ready for use.
-However, testing and contributions are very much welcome.
+
+To build a simple `zstd` binary that will use stdin and stdout:
+
+	./build
+
+And to test it with the input/output cases in `testdata`:
+
+	./test
+
+### Why?
+
+Writing a decoder in Wuffs takes more time, but the end result is an
+implementation that is safe and can be used in many languages without
+linking against C.
+
+For example, that would mean no cgo overhead with Go, and safer code for
+languages like Rust. Though that is somewhere in the future - see the
+roadmap.
+
+If you're after a zstd implementation that works today, use
+https://github.com/DataDog/zstd.
 
 ### Roadmap
 
@@ -17,42 +32,31 @@ This is the current progress of the decoder.
 
 - [x] Zstandard frames
   - [x] Raw blocks
-  - [x] RLE blocks
-  - [x] Compressed blocks
-    - [x] Literals section
-      - [x] Raw literals block
+  - [ ] RLE blocks
+  - [ ] Compressed blocks
+    - [ ] Literals section
+      - [ ] Raw literals block
       - [ ] RLE literals block
       - [ ] Compressed literals block
       - [ ] Treeless literals block
-    - [x] Sequences section
-      - [x] Predefined mode
+    - [ ] Sequences section
+      - [ ] Predefined mode
       - [ ] RLE mode
       - [ ] Repeat mode
       - [ ] FSE compression mode
-    - [x] Sequence execution
-      - [x] Repeat offsets
-      - [x] Other offsets
-  - [x] XXH64 frame content checksum
-- [x] Skippable frames
+    - [ ] Sequence execution
+      - [ ] Repeat offsets
+      - [ ] Other offsets
+  - [ ] XXH64 frame content checksum
+- [ ] Skippable frames
 - [ ] Dictionaries
 
-It should be able to handle simple zstd frames, but it will easily break
-down with complex ones as it is missing many pieces.
+These items are required for a stable 1.0 release:
 
-Performance is not a priority until the decoder supports the entire spec
-and is well tested and fuzzed.
-
-An encoder will likely be implemented, once a full decoder has been
-finished.
-
-### Attributions
-
-Thanks to cespare for his implementation of xxhash: https://github.com/cespare/xxhash
-
-Finally, please note that I am not experienced with compression formats
-nor with the techniques involved in implementing them safely and
-efficiently. As such, it is likely that this implementation is sub-par
-in many aspects, until its code has been reviewed by others.
+- [ ] Wuffs 1.0 release
+- [ ] Go support in Wuffs (generating a Go zstd library)
+- [ ] Full zstd decoder implemented
 
 [Zstandard]: https://facebook.github.io/zstd/
+[Wuffs]: https://github.com/google/wuffs
 [spec]: https://github.com/facebook/zstd/blob/dev/doc/zstd_compression_format.md
