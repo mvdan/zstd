@@ -70,7 +70,7 @@ pub func decoder.decode?(dst writer1, src reader1)() {
 		var blockType u8 = ((blockHeader >> 1) & 3) as u8
 
 		var blockSize u32 = blockHeader >> 3
-		if blockSize > 131072 {
+		if blockSize > maxBlockSize {
 			return error "block size is larger than 128KiB"
 		}
 		if (blockSize as u64) > windowSize {
@@ -82,8 +82,8 @@ pub func decoder.decode?(dst writer1, src reader1)() {
 		} else if blockType == blockTypeRLE {
 			var b u8 = in.src.read_u8?()
 			var i u32
-			while i < blockSize, inv blockSize <= 131072 {
-				assert i <= 131072 via "a <= b: a <= c; c <= b"(c:blockSize)
+			while i < blockSize, inv blockSize <= maxBlockSize {
+				assert i <= maxBlockSize via "a <= b: a <= c; c <= b"(c:blockSize)
 				in.dst.write_u8?(x:b)
 				i += 1
 			}
