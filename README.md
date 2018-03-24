@@ -32,7 +32,7 @@ This is the current progress of the decoder.
 
 - [x] Zstandard frames
   - [x] Raw blocks
-  - [ ] RLE blocks
+  - [x] RLE blocks
   - [ ] Compressed blocks
     - [ ] Literals section
       - [ ] Raw literals block

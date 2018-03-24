@@ -1,10 +1,29 @@
 #!/bin/sh
 
-in=testdata/good/block_raw.zst
-want=testdata/good/block_raw
+failed=false
 
-set -e
+for f in testdata/good/*.zst; do
+	want=${f%%.zst}
+	./zstd <$f >got
+	if [[ $? -ne 0 ]]; then
+		echo "$f is not valid"
+		echo
+		failed=true
+		continue
+	fi
+	# we must use files, as otherwise shell command substution and
+	# vars are going to nuke whitespace and null characters
+	diff=$(diff -u $want got)
+	if [[ $? -ne 0 ]]; then
+		echo "$f has mismatching output:"
+		echo "$diff" | sed 1,2d
+		echo
+		failed=true
+		continue
+	fi
+done
 
-./zstd <$in >got
-diff $want got
 rm -f got
+if $failed; then
+	exit 1
+fi
