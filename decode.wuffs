@@ -3,8 +3,8 @@ packageid "zstd"
 pub struct decoder?(
 )
 
-pub error "not a zstd frame"
-pub error "zstd frame reserved bit was set"
+pub error "not a frame"
+pub error "frame reserved bit was set"
 pub error "reserved block type found"
 pub error "block size is larger than 128KiB"
 pub error "block size is larger than window size"
@@ -14,17 +14,16 @@ pub error "TODO"
 pub func decoder.decode?(dst writer1, src reader1)() {
 	var magic u32 = in.src.read_u32le?()
 	if magic != frameMagicNumber {
-		return error "not a zstd frame"
+		return error "not a frame"
 	}
 
 	var frameHeader u8 = in.src.read_u8?()
 
-	// TODO: replace frameHeader >> 6 with fcsFlag
+	var fcsFlag u8[..0x3] = frameHeader >> 6
+	var fcsFieldSize u8 = fcsFieldSizes[fcsFlag]
 
-	var fcsFieldSize u8 = fcsFieldSizes[frameHeader >> 6]
-
-	var singleSegment u8 = (frameHeader >> 5) & 1
-	if ((frameHeader >> 6) == 0) and (singleSegment != 0) {
+	var singleSegment bool = ((frameHeader >> 5) & 1) == 1
+	if (fcsFlag == 0) and singleSegment {
 		fcsFieldSize = 1
 	}
 
@@ -32,9 +31,7 @@ pub func decoder.decode?(dst writer1, src reader1)() {
 	if fcsFieldSize == 1 {
 		frameContSize = in.src.read_u8?() as u64
 	} else if fcsFieldSize == 2 {
-		frameContSize = in.src.read_u16le?() as u64
-		// TODO: an easier way to prove no overflow?
-		frameContSize = (frameContSize & 0xFFFF) + 256
+		frameContSize = (in.src.read_u16le?() as u64) + 256
 	} else if fcsFieldSize == 4 {
 		frameContSize = in.src.read_u32le?() as u64
 	} else if fcsFieldSize == 8 {
@@ -44,14 +41,14 @@ pub func decoder.decode?(dst writer1, src reader1)() {
 	}
 
 	var windowSize u64 = minWindowSize
-	if singleSegment == 0 {
+	if not singleSegment {
 		return error "TODO"
 	} else {
 		windowSize = frameContSize
 	}
 
-	if ((frameHeader >> 3) & 1) != 0 {
-		return error "zstd frame reserved bit was set"
+	if ((frameHeader >> 3) & 1) == 1 {
+		return error "frame reserved bit was set"
 	}
 
 	var hashing bool = ((frameHeader >> 2) & 1) == 1
@@ -61,15 +58,15 @@ pub func decoder.decode?(dst writer1, src reader1)() {
 
 	while true {
 		// spaghetti code to read a three-byte little endian number
-		var blockLower u32 = in.src.read_u8?() as u32
-		var blockUpper u32 = in.src.read_u16le?() as u32
-		var blockHeader u32 = ((blockUpper & 0xFFFF) << 8) | blockLower
+		var blockLower u32[..0xFF] = in.src.read_u8?() as u32
+		var blockUpper u32[..0xFFFF] = in.src.read_u16le?() as u32
+		var blockHeader u32[..0xFFFFFF] = (blockUpper << 8) | blockLower
 
 		var isLastBlock bool = (blockHeader & 1) == 1
 
-		var blockType u8 = ((blockHeader >> 1) & 3) as u8
+		var blockType u8[..0x3] = ((blockHeader >> 1) & 3) as u8
 
-		var blockSize u32 = blockHeader >> 3
+		var blockSize u32[..0x1FFFFF] = blockHeader >> 3
 		if blockSize > 131072 {
 			return error "block size is larger than 128KiB"
 		}
@@ -77,10 +74,11 @@ pub func decoder.decode?(dst writer1, src reader1)() {
 			return error "block size is larger than window size"
 		}
 
+		var b u8
 		if blockType == blockTypeRaw {
 			in.dst.copy_from_reader32(r:in.src, length:blockSize)
 		} else if blockType == blockTypeRLE {
-			var b u8 = in.src.read_u8?()
+			b = in.src.read_u8?()
 			var i u32
 			while i < blockSize, inv blockSize <= 131072 {
 				assert i <= 131072 via "a <= b: a <= c; c <= b"(c:blockSize)
