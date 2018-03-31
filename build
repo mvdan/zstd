@@ -4,6 +4,6 @@ set -e
 
 wuffs-c gen -package_name zstd decode.wuffs consts.wuffs >decode.c
 
-gcc wuffmain.c -o zstd
+gcc wuffsmain.c -o zstd
 
 rm -f decode.c
