@@ -11,7 +11,7 @@ pub error "block size is larger than window size"
 
 pub error "TODO"
 
-pub func decoder.decode?(dst writer1, src reader1)() {
+pub func decoder.decode?(dst io_writer, src io_reader)() {
 	var magic u32 = in.src.read_u32le?()
 	if magic != frame_magic_number {
 		return error "not a frame"

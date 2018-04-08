@@ -35,11 +35,11 @@ const char* read_stdin() {
 }
 
 const char* decode() {
-	wuffs_base__buf1 src = {.ptr = src_buf, .len = src_len, .wi = src_len, .closed = true};
-	wuffs_base__reader1 src_reader = {.buf = &src};
+	wuffs_base__io_buffer src = {.ptr = src_buf, .len = src_len, .wi = src_len, .closed = true};
+	wuffs_base__io_reader src_reader = {.buf = &src};
 
-	wuffs_base__buf1 dst = {.ptr = dst_buf, .len = DST_BUF_SIZE};
-	wuffs_base__writer1 dst_writer = {.buf = &dst};
+	wuffs_base__io_buffer dst = {.ptr = dst_buf, .len = DST_BUF_SIZE};
+	wuffs_base__io_writer dst_writer = {.buf = &dst};
 
 	wuffs_zstd__decoder dec;
 	wuffs_zstd__decoder__initialize(&dec, WUFFS_VERSION, 0);
