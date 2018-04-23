@@ -1,10 +1,10 @@
-pri const frame_magic_number u32 = 0xFD2FB528
+pri const frame_magic_number base.u32 = 0xFD2FB528
 
-pri const fcs_field_sizes array[4] u8 = $(0, 2, 4, 8)
+pri const fcs_field_sizes array[4] base.u8 = $(0, 2, 4, 8)
 
-pri const block_type_raw u8 = 0
-pri const block_type_rle u8 = 1
-pri const block_type_compressed u8 = 2
+pri const block_type_raw base.u8 = 0
+pri const block_type_rle base.u8 = 1
+pri const block_type_compressed base.u8 = 2
 
-pri const min_window_size u64 = 1 << 10 // 1KiB
-pri const max_block_size u32 = 128 << 10 // 128KiB
+pri const min_window_size base.u64 = 1 << 10 // 1KiB
+pri const max_block_size base.u32 = 128 << 10 // 128KiB
