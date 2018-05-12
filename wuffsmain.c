@@ -36,10 +36,10 @@ const char* read_stdin() {
 
 const char* decode() {
 	wuffs_base__io_buffer src = {.ptr = src_buf, .len = src_len, .wi = src_len, .closed = true};
-	wuffs_base__io_reader src_reader = {.buf = &src};
+	wuffs_base__io_reader src_reader = wuffs_base__io_buffer__reader(&src);
 
 	wuffs_base__io_buffer dst = {.ptr = dst_buf, .len = DST_BUF_SIZE};
-	wuffs_base__io_writer dst_writer = {.buf = &dst};
+	wuffs_base__io_writer dst_writer = wuffs_base__io_buffer__writer(&dst);
 
 	wuffs_zstd__decoder dec;
 	wuffs_zstd__decoder__initialize(&dec, WUFFS_VERSION, 0);
