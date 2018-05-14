@@ -76,7 +76,7 @@ pub func decoder.decode?(dst base.io_writer, src base.io_reader)() {
 
 		var b base.u8
 		if block_type == block_type_raw {
-			in.dst.copy_from_reader32(r:in.src, length:block_size)
+			in.dst.copy_from_reader32!(r:in.src, length:block_size)
 		} else if block_type == block_type_rle {
 			b = in.src.read_u8?()
 			var i base.u32
