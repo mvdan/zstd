@@ -57,13 +57,9 @@ pub func decoder.decode?(dst base.io_writer, src base.io_reader)() {
 	// TODO: possibly read dictionary ID
 
 	while true {
-		// spaghetti code to read a three-byte little endian number
-		var block_lower base.u32[..0xFF] = in.src.read_u8?() as base.u32
-		var block_upper base.u32[..0xFFFF] = in.src.read_u16le?() as base.u32
-		var block_header base.u32[..0xFFFFFF] = (block_upper << 8) | block_lower
+		var block_header base.u32[..0xFFFFFF] = in.src.read_u24le?()
 
 		var is_last_block base.bool = (block_header & 1) == 1
-
 		var block_type base.u8[..0x3] = ((block_header >> 1) & 3) as base.u8
 
 		var block_size base.u32[..0x1FFFFF] = block_header >> 3
