@@ -41,8 +41,8 @@ const char* decode() {
 	wuffs_base__io_buffer dst = {.ptr = dst_buf, .len = DST_BUF_SIZE};
 	wuffs_base__io_writer dst_writer = wuffs_base__io_buffer__writer(&dst);
 
-	wuffs_zstd__decoder dec;
-	wuffs_zstd__decoder__initialize(&dec, WUFFS_VERSION, 0);
+	wuffs_zstd__decoder dec = ((wuffs_zstd__decoder){});
+	wuffs_zstd__decoder__check_wuffs_version(&dec, sizeof dec, WUFFS_VERSION);
 
 	wuffs_zstd__status s = wuffs_zstd__decoder__decode(&dec, dst_writer, src_reader);
 	if (s) {
