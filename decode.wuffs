@@ -52,9 +52,9 @@ pri func decoder.decode_frame?(dst base.io_writer, src base.io_reader)() {
 	} else if fcs_field_size == 4 {
 		frame_cont_size = in.src.read_u32le?() as base.u64
 	} else if fcs_field_size == 8 {
-		// TODO: read_u64le doesn't seem to compile
+		frame_cont_size = in.src.read_u64le?()
 	} else {
-		// TODO: prove this can't happen?
+		return error "TODO" // prove this can't happen?
 	}
 
 	var window_size base.u64 = min_window_size
@@ -69,9 +69,11 @@ pri func decoder.decode_frame?(dst base.io_writer, src base.io_reader)() {
 	}
 
 	var hashing base.bool = ((frame_header >> 2) & 1) == 1
-	// TODO: do the hashing
 
-	// TODO: possibly read dictionary ID
+	var dict_id_flag base.u8 = frame_header & 3
+	if dict_id_flag > 0 {
+		return error "TODO" // read and use dictionary ID
+	}
 
 	while true {
 		var block_header base.u32[..0xFFFFFF] = in.src.read_u24le?()
