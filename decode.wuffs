@@ -12,6 +12,18 @@ pub error "block size is larger than window size"
 pub error "TODO"
 
 pub func decoder.decode?(dst base.io_writer, src base.io_reader)() {
+	while in.src.available() > 0 {
+		var z base.status = try this.decode_frame?(dst:in.dst, src:in.src)
+		if z.is_suspension() {
+			yield z
+		}
+		if z.is_error() {
+			return z
+		}
+	}
+}
+
+pri func decoder.decode_frame?(dst base.io_writer, src base.io_reader)() {
 	var magic base.u32 = in.src.read_u32le?()
 	if magic != frame_magic_number {
 		return error "not a frame"
@@ -96,5 +108,9 @@ pub func decoder.decode?(dst base.io_writer, src base.io_reader)() {
 		if is_last_block {
 			break
 		}
+	}
+	if hashing {
+		var sum base.u32 = in.src.read_u32le?()
+		// TODO: check the hash
 	}
 }
