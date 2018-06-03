@@ -25,6 +25,11 @@ pub func decoder.decode?(dst base.io_writer, src base.io_reader)() {
 
 pri func decoder.decode_frame?(dst base.io_writer, src base.io_reader)() {
 	var magic base.u32 = in.src.read_u32le?()
+	if (magic >= frame_magic_skip_first) and (magic <= frame_magic_skip_last) {
+		var frame_size base.u32 = in.src.read_u32le?()
+		in.src.skip32?(n:frame_size)
+		return
+	}
 	if magic != frame_magic_number {
 		return error "not a frame"
 	}

@@ -1,5 +1,8 @@
 pri const frame_magic_number base.u32 = 0xFD2FB528
 
+pri const frame_magic_skip_first base.u32 = 0x184D2A50
+pri const frame_magic_skip_last base.u32 = 0x184D2A5F
+
 pri const fcs_field_sizes array[4] base.u8 = $(0, 2, 4, 8)
 
 pri const block_type_raw base.u8 = 0

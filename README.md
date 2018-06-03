@@ -48,7 +48,7 @@ This is the current progress of the decoder.
       - [ ] Repeat offsets
       - [ ] Other offsets
   - [ ] XXH64 frame content checksum
-- [ ] Skippable frames
+- [x] Skippable frames
 - [ ] Dictionaries
 
 These items are required for a stable 1.0 release:
