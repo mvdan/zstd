@@ -3,13 +3,13 @@ packageid "zstd"
 pub struct decoder?(
 )
 
-pub error "not a frame"
-pub error "frame reserved bit was set"
-pub error "reserved block type found"
-pub error "block size is larger than 128KiB"
-pub error "block size is larger than window size"
+pub error (0x01) "not a frame"
+pub error (0x02) "frame reserved bit was set"
+pub error (0x03) "reserved block type found"
+pub error (0x04) "block size is larger than 128KiB"
+pub error (0x05) "block size is larger than window size"
 
-pub error "TODO"
+pub error (0x10) "TODO"
 
 pub func decoder.decode?(dst base.io_writer, src base.io_reader)() {
 	while in.src.available() > 0 {
@@ -102,7 +102,7 @@ pri func decoder.decode_frame?(dst base.io_writer, src base.io_reader)() {
 				// TODO: hopefully clean up once this issue is
 				// fixed: https://github.com/google/wuffs/issues/11
 				assert i <= max_block_size via "a <= b: a <= c; c <= b"(c:block_size)
-				assert i <= 131072 via "a <= b: a <= c; c == b"(c: max_block_size)
+				assert i <= 131072 via "a <= b: a <= c; c == b"(c:max_block_size)
 
 				in.dst.write_u8?(x:b)
 				i += 1

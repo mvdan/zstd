@@ -41,20 +41,20 @@ static const char* decode() {
 		while (true) {
 			wuffs_base__io_buffer dst = ((wuffs_base__io_buffer){.ptr = dst_buffer, .len = DST_BUFFER_SIZE});
 			wuffs_base__io_writer dst_writer = wuffs_base__io_buffer__writer(&dst);
-			wuffs_zstd__status s = wuffs_zstd__decoder__decode(&dec, dst_writer, src_reader);
+			wuffs_base__status s = wuffs_zstd__decoder__decode(&dec, dst_writer, src_reader);
 
 			if (dst.wi) {
 				const int stdout_fd = 1;
 				ignore_return_value(write(stdout_fd, dst_buffer, dst.wi));
 			}
 
-			if (s == WUFFS_ZSTD__STATUS_OK) {
+			if (s == WUFFS_BASE__STATUS_OK) {
 				return NULL;
 			}
-			if (s == WUFFS_ZSTD__SUSPENSION_SHORT_READ) {
+			if (s == WUFFS_BASE__SUSPENSION_SHORT_READ) {
 				break;
 			}
-			if (s != WUFFS_ZSTD__SUSPENSION_SHORT_WRITE) {
+			if (s != WUFFS_BASE__SUSPENSION_SHORT_WRITE) {
 				return wuffs_zstd__status__string(s);
 			}
 		}
