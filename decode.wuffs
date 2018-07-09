@@ -27,7 +27,7 @@ pri func decoder.decode_frame?(dst base.io_writer, src base.io_reader)() {
 	var magic base.u32 = in.src.read_u32le?()
 	if (magic >= frame_magic_skip_first) and (magic <= frame_magic_skip_last) {
 		var frame_size base.u32 = in.src.read_u32le?()
-		in.src.skip32?(n:frame_size)
+		in.src.skip?(n:frame_size)
 		return
 	}
 	if magic != frame_magic_number {
@@ -91,7 +91,7 @@ pri func decoder.decode_frame?(dst base.io_writer, src base.io_reader)() {
 
 		var b base.u8
 		if block_type == block_type_raw {
-			in.dst.copy_from_reader32!(r:in.src, length:block_size)
+			in.dst.copy_n_from_reader!(n:block_size, r:in.src)
 		} else if block_type == block_type_rle {
 			b = in.src.read_u8?()
 			var i base.u32
