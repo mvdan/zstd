@@ -5,6 +5,6 @@ export WUFFSROOT=$(go list -e -f {{.Dir}} github.com/google/wuffs)
 
 wuffs-c gen -package_name zstd decode.wuffs consts.wuffs >decode.c
 
-gcc wuffsmain.c $WUFFSROOT/gen/c/base.c -o zstd
+gcc wuffsmain.c -o zstd
 
 rm -f decode.c

@@ -1,6 +1,8 @@
 #include <errno.h>
 #include <unistd.h>
 
+#define WUFFS_IMPLEMENTATION
+
 #include "decode.c"
 
 #ifndef DST_BUFFER_SIZE
