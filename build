@@ -3,8 +3,8 @@
 set -e
 export WUFFSROOT=$(go list -e -f {{.Dir}} github.com/google/wuffs)
 
-wuffs-c gen -package_name zstd decode.wuffs consts.wuffs >decode.c
+wuffs-c gen -package_name zstd decode.wuffs consts.wuffs >decode.h
 
-gcc wuffsmain.c -o zstd
+gcc -x c -DWUFFS_IMPLEMENTATION wuffsmain.c $WUFFSROOT/release/c/wuffs-v0.2.h -o zstd
 
-rm -f decode.c
+rm -f decode.h
