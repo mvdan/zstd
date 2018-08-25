@@ -114,7 +114,6 @@ pri func decoder.decode_block!??(dst base.io_writer, src base.io_reader, header 
 		b = args.src.read_u8!??()
 		var i base.u32
 		while i < block_size,
-			inv max_block_size == 131072,
 			inv block_size <= max_block_size {
 
 			// TODO: hopefully clean up once this issue is
