@@ -1,0 +1,25 @@
+language: go
+
+go:
+  - 1.11.x
+
+matrix:
+  include:
+    - os: linux
+      addons:
+        apt:
+          sources:
+            - llvm-toolchain-trusty-5.0
+          packages:
+            - clang-format-5.0
+
+go_import_path: mvdan.cc/zstd
+
+env:
+  - GO111MODULE=on
+
+install: true
+
+script:
+  - ./build
+  - ./test

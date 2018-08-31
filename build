@@ -1,11 +1,14 @@
-#!/bin/sh
+#!/bin/bash
 
 set -e
+
+CC=${CC:-gcc}
+
 go install -v github.com/google/wuffs/cmd/wuffs-c
 export WUFFSROOT=$(go list -m -f {{.Dir}} github.com/google/wuffs)
 
 wuffs-c gen -package_name zstd decode.wuffs consts.wuffs >decode.h
 
-gcc -x c -DWUFFS_IMPLEMENTATION wuffsmain.c $WUFFSROOT/release/c/wuffs-v0.2.h -o zstd
+$CC -x c -DWUFFS_IMPLEMENTATION wuffsmain.c $WUFFSROOT/release/c/wuffs-v0.2.h -o zstd
 
 rm -f decode.h
