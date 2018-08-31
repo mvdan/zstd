@@ -1,7 +1,8 @@
 #!/bin/sh
 
 set -e
-export WUFFSROOT=$(go list -e -f {{.Dir}} github.com/google/wuffs)
+go install -v github.com/google/wuffs/cmd/wuffs-c
+export WUFFSROOT=$(go list -m -f {{.Dir}} github.com/google/wuffs)
 
 wuffs-c gen -package_name zstd decode.wuffs consts.wuffs >decode.h
 
