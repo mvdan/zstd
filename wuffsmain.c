@@ -2,6 +2,7 @@
 #include <unistd.h>
 
 #include "decode.h"
+#include "wuffs-base.h"
 
 #ifndef DST_BUFFER_SIZE
 #define DST_BUFFER_SIZE (16 * 1024)
@@ -35,21 +36,31 @@ static const char* decode() {
 		}
 
 		wuffs_base__io_buffer src = ((wuffs_base__io_buffer){
+			.data = ((wuffs_base__slice_u8){
 				.ptr = src_buffer,
 				.len = SRC_BUFFER_SIZE,
+			}),
+			.meta = ((wuffs_base__io_buffer_meta){
 				.wi = n_src,
 				.closed = n_src == 0,
+			}),
 		});
+
 		wuffs_base__io_reader src_reader = wuffs_base__io_buffer__reader(&src);
 
 		while (true) {
-			wuffs_base__io_buffer dst = ((wuffs_base__io_buffer){.ptr = dst_buffer, .len = DST_BUFFER_SIZE});
+			wuffs_base__io_buffer dst = ((wuffs_base__io_buffer){
+				.data = ((wuffs_base__slice_u8){
+					.ptr = dst_buffer,
+					.len = DST_BUFFER_SIZE,
+				}),
+			});
 			wuffs_base__io_writer dst_writer = wuffs_base__io_buffer__writer(&dst);
 			wuffs_base__status z = wuffs_zstd__decoder__decode(&dec, dst_writer, src_reader);
 
-			if (dst.wi) {
+			if (dst.meta.wi) {
 				const int stdout_fd = 1;
-				ignore_return_value(write(stdout_fd, dst_buffer, dst.wi));
+				ignore_return_value(write(stdout_fd, dst_buffer, dst.meta.wi));
 			}
 
 			if (z == wuffs_base__suspension__short_read) {
