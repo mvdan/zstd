@@ -2,7 +2,6 @@
 #include <unistd.h>
 
 #include "decode.h"
-#include "wuffs-base.h"
 
 #ifndef DST_BUFFER_SIZE
 #define DST_BUFFER_SIZE (16 * 1024)

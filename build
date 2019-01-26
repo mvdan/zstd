@@ -9,9 +9,9 @@ export WUFFSROOT=$(go list -m -f {{.Dir}} github.com/google/wuffs)
 
 wuffs-c gen -package_name zstd decode.wuffs consts.wuffs >decode.h
 
-rm -f wuffs-base.h
-cp $WUFFSROOT/release/c/wuffs-v0.2.h wuffs-base.h
+rm -f wuffs-base.c
+cp $WUFFSROOT/release/c/wuffs-unsupported-snapshot.c wuffs-base.c
 
-$CC -x c -DWUFFS_IMPLEMENTATION wuffs-base.h wuffsmain.c -o zstd
+$CC -x c -DWUFFS_IMPLEMENTATION wuffs-base.c wuffsmain.c -o zstd
 
 rm -f decode.h
