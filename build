@@ -1,5 +1,7 @@
 #!/bin/bash
 
+export GO111MODULE=on
+
 set -e
 
 CC=${CC:-gcc}
@@ -9,9 +11,8 @@ export WUFFSROOT=$(go list -m -f {{.Dir}} github.com/google/wuffs)
 
 wuffs-c gen -package_name zstd decode.wuffs consts.wuffs >decode.h
 
-rm -f wuffs-base.c
-cp $WUFFSROOT/release/c/wuffs-unsupported-snapshot.c wuffs-base.c
+cp -f $WUFFSROOT/release/c/wuffs-unsupported-snapshot.c wuffs-base.c
 
 $CC -x c -DWUFFS_IMPLEMENTATION wuffs-base.c wuffsmain.c -o zstd
 
-rm -f decode.h
+rm -f decode.h wuffs-base.c
