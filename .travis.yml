@@ -1,7 +1,7 @@
 language: go
 
 go:
-  - 1.11.x
+  - 1.12.x
 
 matrix:
   include:
@@ -12,8 +12,6 @@ matrix:
             - llvm-toolchain-trusty-5.0
           packages:
             - clang-format-5.0
-
-go_import_path: mvdan.cc/zstd
 
 env:
   - GO111MODULE=on
