@@ -15,7 +15,7 @@ pub func decoder.decode?(dst base.io_writer, src base.io_reader) {
 	while args.src.available() > 0 {
 		z =? this.decode_frame?(dst:args.dst, src:args.src)
 		if z.is_suspension() {
-			yield z
+			yield? z
 		}
 		if z.is_error() {
 			return z
@@ -44,7 +44,7 @@ pri func decoder.decode_frame?(dst base.io_writer, src base.io_reader) {
 		args.src.skip?(n:frame_size)
 		return ok
 	}
-	if magic != frame_magic_number {
+	if magic <> frame_magic_number {
 		return "?not a frame"
 	}
 
@@ -95,7 +95,7 @@ pri func decoder.decode_frame?(dst base.io_writer, src base.io_reader) {
 		is_last_block = (block_header & 1) == 1
 		z =? this.decode_block?(dst:args.dst, src:args.src, header:block_header)
 		if z.is_suspension() {
-			yield z
+			yield? z
 		}
 		if z.is_error() {
 			return z
