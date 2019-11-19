@@ -9,5 +9,5 @@ pri const block_type_raw base.u8 = 0
 pri const block_type_rle base.u8 = 1
 pri const block_type_compressed base.u8 = 2
 
-pri const min_window_size base.u64 = 1 << 10 // 1KiB
-pri const max_block_size base.u32 = 128 << 10 // 128KiB
+pri const min_window_size base.u64 = 1 << 10  // 1KiB
+pri const max_block_size base.u32 = 128 << 10  // 128KiB

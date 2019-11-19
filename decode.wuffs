@@ -1,5 +1,5 @@
 pub struct decoder?(
-	window_size: base.u64,
+	window_size : base.u64,
 )
 
 pub status "?not a frame"
@@ -11,9 +11,9 @@ pub status "?block size is larger than window size"
 pub status "?TODO"
 
 pub func decoder.decode?(dst: base.io_writer, src: base.io_reader) {
-	var z: base.status
+	var z : base.status
 	while args.src.available() > 0 {
-		z =? this.decode_frame?(dst:args.dst, src:args.src)
+		z =? this.decode_frame?(dst: args.dst, src: args.src)
 		if z.is_suspension() {
 			yield? z
 		}
@@ -24,24 +24,24 @@ pub func decoder.decode?(dst: base.io_writer, src: base.io_reader) {
 }
 
 pri func decoder.decode_frame?(dst: base.io_writer, src: base.io_reader) {
-	var magic: base.u32
-	var frame_size: base.u32
-	var frame_header: base.u8
-	var fcs_flag: base.u8[..= 0x3]
-	var fcs_field_size: base.u8
-	var single_segment: base.bool
-	var frame_cont_size: base.u64
-	var hashing: base.bool
-	var dict_id_flag: base.u8
-	var block_header: base.u32[..= 0xFFFFFF]
-	var is_last_block: base.bool
-	var z: base.status
-	var sum: base.u32
+	var magic           : base.u32
+	var frame_size      : base.u32
+	var frame_header    : base.u8
+	var fcs_flag        : base.u8[..= 0x3]
+	var fcs_field_size  : base.u8
+	var single_segment  : base.bool
+	var frame_cont_size : base.u64
+	var hashing         : base.bool
+	var dict_id_flag    : base.u8
+	var block_header    : base.u32[..= 0xFFFFFF]
+	var is_last_block   : base.bool
+	var z               : base.status
+	var sum             : base.u32
 
 	magic = args.src.read_u32le?()
 	if (magic >= frame_magic_skip_first) and (magic <= frame_magic_skip_last) {
 		frame_size = args.src.read_u32le?()
-		args.src.skip?(n:frame_size)
+		args.src.skip?(n: frame_size)
 		return ok
 	}
 	if magic <> frame_magic_number {
@@ -68,7 +68,7 @@ pri func decoder.decode_frame?(dst: base.io_writer, src: base.io_reader) {
 	} else if fcs_field_size == 8 {
 		frame_cont_size = args.src.read_u64le?()
 	} else {
-		return "?TODO" // prove this can't happen?
+		return "?TODO"  // prove this can't happen?
 	}
 
 	this.window_size = min_window_size
@@ -86,14 +86,14 @@ pri func decoder.decode_frame?(dst: base.io_writer, src: base.io_reader) {
 
 	dict_id_flag = frame_header & 3
 	if dict_id_flag > 0 {
-		return "?TODO" // read and use dictionary ID
+		return "?TODO"  // read and use dictionary ID
 	}
 
 	while true {
 		block_header = args.src.read_u24le_as_u32?()
 
 		is_last_block = (block_header & 1) == 1
-		z =? this.decode_block?(dst:args.dst, src:args.src, header:block_header)
+		z =? this.decode_block?(dst: args.dst, src: args.src, header: block_header)
 		if z.is_suspension() {
 			yield? z
 		}
@@ -111,10 +111,10 @@ pri func decoder.decode_frame?(dst: base.io_writer, src: base.io_reader) {
 }
 
 pri func decoder.decode_block?(dst: base.io_writer, src: base.io_reader, header: base.u32[..= 0xFFFFFF]) {
-	var block_size: base.u32
-	var block_type: base.u8
-	var b: base.u8
-	var i: base.u32
+	var block_size : base.u32
+	var block_type : base.u8
+	var b          : base.u8
+	var i          : base.u32
 
 	block_size = args.header >> 3
 	if block_size > max_block_size {
@@ -126,7 +126,7 @@ pri func decoder.decode_block?(dst: base.io_writer, src: base.io_reader, header:
 	block_type = ((args.header >> 1) & 3) as base.u8
 
 	if block_type == block_type_raw {
-		args.dst.copy_n_from_reader!(n:block_size, r:args.src)
+		args.dst.copy_n_from_reader!(n: block_size, r: args.src)
 	} else if block_type == block_type_rle {
 		b = args.src.read_u8?()
 		while i < block_size,
@@ -134,8 +134,8 @@ pri func decoder.decode_block?(dst: base.io_writer, src: base.io_reader, header:
 
 			// TODO: hopefully clean up once this issue is
 			// fixed: https://github.com/google/wuffs/issues/11
-			assert i <= max_block_size via "a <= b: a <= c; c <= b"(c:block_size)
-			assert i <= 131072 via "a <= b: a <= c; c == b"(c:max_block_size)
+			assert i <= max_block_size via "a <= b: a <= c; c <= b"(c: block_size)
+			assert i <= 131072 via "a <= b: a <= c; c == b"(c: max_block_size)
 
 			args.dst.write_u8?(a: b)
 			i += 1
