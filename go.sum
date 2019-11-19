@@ -1,2 +1,2 @@
-github.com/google/wuffs v0.0.0-20190721063706-a4195136bb74 h1:PCcykedb9YigTpQgntzNt1I/kPm+NNQQY5VO/M4v8fA=
-github.com/google/wuffs v0.0.0-20190721063706-a4195136bb74/go.mod h1:CXN6/+deEtlZkYTWeZJOHoXibYZ0HYO9qPmXSUcyFwI=
+github.com/google/wuffs v0.1.1-0.20191116223715-191c6bc6f28e h1:hCgErW5Xt0oWHmU31xBVZWd5uvDAfmkEqgYqgUH9N88=
+github.com/google/wuffs v0.1.1-0.20191116223715-191c6bc6f28e/go.mod h1:CXN6/+deEtlZkYTWeZJOHoXibYZ0HYO9qPmXSUcyFwI=

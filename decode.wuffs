@@ -1,5 +1,5 @@
 pub struct decoder?(
-	window_size base.u64,
+	window_size: base.u64,
 )
 
 pub status "?not a frame"
@@ -10,8 +10,8 @@ pub status "?block size is larger than window size"
 
 pub status "?TODO"
 
-pub func decoder.decode?(dst base.io_writer, src base.io_reader) {
-	var z base.status
+pub func decoder.decode?(dst: base.io_writer, src: base.io_reader) {
+	var z: base.status
 	while args.src.available() > 0 {
 		z =? this.decode_frame?(dst:args.dst, src:args.src)
 		if z.is_suspension() {
@@ -23,20 +23,20 @@ pub func decoder.decode?(dst base.io_writer, src base.io_reader) {
 	}
 }
 
-pri func decoder.decode_frame?(dst base.io_writer, src base.io_reader) {
-	var magic base.u32
-	var frame_size base.u32
-	var frame_header base.u8
-	var fcs_flag base.u8[..0x3]
-	var fcs_field_size base.u8
-	var single_segment base.bool
-	var frame_cont_size base.u64
-	var hashing base.bool
-	var dict_id_flag base.u8
-	var block_header base.u32[..0xFFFFFF]
-	var is_last_block base.bool
-	var z base.status
-	var sum base.u32
+pri func decoder.decode_frame?(dst: base.io_writer, src: base.io_reader) {
+	var magic: base.u32
+	var frame_size: base.u32
+	var frame_header: base.u8
+	var fcs_flag: base.u8[..= 0x3]
+	var fcs_field_size: base.u8
+	var single_segment: base.bool
+	var frame_cont_size: base.u64
+	var hashing: base.bool
+	var dict_id_flag: base.u8
+	var block_header: base.u32[..= 0xFFFFFF]
+	var is_last_block: base.bool
+	var z: base.status
+	var sum: base.u32
 
 	magic = args.src.read_u32le?()
 	if (magic >= frame_magic_skip_first) and (magic <= frame_magic_skip_last) {
@@ -110,11 +110,11 @@ pri func decoder.decode_frame?(dst base.io_writer, src base.io_reader) {
 	}
 }
 
-pri func decoder.decode_block?(dst base.io_writer, src base.io_reader, header base.u32[..0xFFFFFF]) {
-	var block_size base.u32
-	var block_type base.u8
-	var b base.u8
-	var i base.u32
+pri func decoder.decode_block?(dst: base.io_writer, src: base.io_reader, header: base.u32[..= 0xFFFFFF]) {
+	var block_size: base.u32
+	var block_type: base.u8
+	var b: base.u8
+	var i: base.u32
 
 	block_size = args.header >> 3
 	if block_size > max_block_size {
@@ -137,7 +137,7 @@ pri func decoder.decode_block?(dst base.io_writer, src base.io_reader, header ba
 			assert i <= max_block_size via "a <= b: a <= c; c <= b"(c:block_size)
 			assert i <= 131072 via "a <= b: a <= c; c == b"(c:max_block_size)
 
-			args.dst.write_u8?(x:b)
+			args.dst.write_u8?(a: b)
 			i += 1
 		}
 	} else if block_type == block_type_compressed {

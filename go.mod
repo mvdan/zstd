@@ -1,5 +1,5 @@
 module mvdan.cc/zstd
 
-require github.com/google/wuffs v0.0.0-20190721063706-a4195136bb74
+require github.com/google/wuffs v0.1.1-0.20191116223715-191c6bc6f28e
 
 go 1.13
